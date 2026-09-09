@@ -15,8 +15,6 @@ const SVG = {
 const NAV_LINKS = [
   { key: "home", href: "index.html", label: "Home" },
   { key: "cars", href: "cars.html", label: "Cars" },
-  { key: "locations", href: "cars.html", label: "Locations" },
-  { key: "how", href: "index.html#how", label: "How It Works" },
   { key: "bookings", href: "my-bookings.html", label: "My Bookings" },
   { key: "admin", href: "admin.html", label: "Admin" },
 ];
@@ -58,7 +56,7 @@ function Footer(variant) {
       <div class="sf-social"><a href="index.html" aria-label="Instagram">${SVG.instagram}</a><a href="index.html" aria-label="Facebook">${SVG.facebook}</a><a href="index.html" aria-label="X">${SVG.x}</a><a href="index.html" aria-label="YouTube">${SVG.youtube}</a><a href="index.html" aria-label="LinkedIn">${SVG.linkedin}</a></div>
     </div>
     <div><h4>Company</h4><a href="index.html">About</a><a href="index.html">Contact Us</a><a href="index.html">Help Center</a></div>
-    <div><h4>Explore</h4><a href="cars.html">Cars</a><a href="cars.html">Locations</a><a href="index.html#how">How It Works</a><a href="my-bookings.html">My Bookings</a></div>
+    <div><h4>Explore</h4><a href="cars.html">Cars</a><a href="index.html#locations">Locations</a><a href="index.html#how">How It Works</a><a href="my-bookings.html">My Bookings</a></div>
     <div><h4>Support</h4><a href="index.html">Terms &amp; Conditions</a><a href="index.html">Privacy Policy</a><a href="login.html">Login</a></div>
     <div class="footer-contact"><h4>Contact</h4><p class="small">${SVG.phone}+91 98765 43210</p><p class="small">${SVG.mail}support@drivego.com</p><p class="small">${SVG.pin}Kolkata, West Bengal</p></div>
   </div>
