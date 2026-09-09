@@ -13,7 +13,7 @@ F:\car\
 ├── cars.html          # search results (static filters; cards injected by site.js)
 ├── car-details.html   # car detail (?id=; filled by site.js)
 ├── booking.html       # dates + mock availability step
-├── documents.html     # mock document upload (static; JS toggles Uploaded ✓)
+├── documents.html     # mock document upload (static; JS toggles Uploaded state)
 ├── delivery.html      # store pickup vs home delivery (+₹300)
 ├── summary.html       # price math filled by site.js
 ├── payment.html       # mock payment (JS simulates success → confirmation.html)
@@ -25,13 +25,25 @@ F:\car\
 ├── styles.css         # full design system (responsive, premium minimal)
 ├── data.js            # mockData: cars / locations / bookings / admin  ← replace with Django APIs later
 ├── site.js            # ONLY demo-data binding (reads data.js, fills page placeholders)
+├── components.js      # reusable Navbar/Footer vanilla partials (single source of truth)
 └── PROJECT_DOCS.md (this file)
 ```
 
 > Structure rule: **pages = HTML, styling = CSS, demo data = JS.**
 > `site.js` never builds page layouts — each `.html` file holds its own
-> navbar, footer, forms and content; JS only fills marked placeholders
+> forms and content; JS only fills marked placeholders
 > (`#popularCars`, `#carsGrid`, `#sumTotal`, …) from `data.js`.
+>
+> Shared chrome (navbar/footer) lives once in `components.js` and mounts
+> into `<div id="siteNav"></div>` / `<div id="siteFoot"></div>` slots.
+> Pages declare `<body data-nav="cars" data-footer="dark">`.
+> No React/Vue/Angular — HTML + CSS + vanilla JS only.
+>
+> Django-template mapping (Phase 2): each page becomes
+> `templates/<page>.html` extending `base.html`; the slots become
+> `{% include "partials/navbar.html" %}` / `{% include "partials/footer.html" %}`;
+> `components.js:Navbar` → `partials/navbar.html`,
+> `components.js:Footer` → `partials/footer.html` (dark + light variants).
 
 ### Pages (plain files / links — no router)
 

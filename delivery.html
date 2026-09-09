@@ -3,26 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>DriveGo — Pickup or Delivery</title>
+<title>DriveGo - Pickup or Delivery</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css" />
 </head>
-<body data-page="delivery">
+<body data-page="delivery" data-nav="cars" data-footer="dark">
 
-<header class="nav">
-  <div class="container nav-inner">
-    <a href="index.html" class="logo">DriveGo<span class="logo-dot">.</span></a>
-    <nav class="nav-links" id="navLinks">
-      <a href="index.html">Home</a><a href="cars.html" class="active">Cars</a><a href="cars.html">Locations</a>
-      <a href="index.html#how">How It Works</a><a href="my-bookings.html">My Bookings</a><a href="admin.html">Admin</a>
-    </nav>
-    <div class="nav-actions">
-      <a href="login.html" class="btn btn-ghost">Login</a>
-      <a href="cars.html" class="btn btn-primary">Book a Car</a>
-      <button class="nav-toggle" id="navToggle" aria-label="Menu"><svg class="ic" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
-    </div>
-  </div>
-</header>
+<div id="siteNav"></div>
 
 <main class="container">
   <div class="section" style="max-width:720px">
@@ -36,11 +23,10 @@
 
     <h2>How would you like to receive your car?</h2>
 
-    <!-- STATIC choice cards; JS only remembers the selection -->
     <div class="choice-cards">
       <div class="choice sel" data-method="store">
         <b><svg class="ic" viewBox="0 0 24 24"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg>Pickup from Store</b>
-        <p class="small muted">Salt Lake Rental Garage, Sector V<br>Free · 9 AM – 9 PM</p>
+        <p class="small muted">Salt Lake Rental Garage, Sector V<br>Free · 9 AM - 9 PM</p>
       </div>
       <div class="choice" data-method="home">
         <b><svg class="ic" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Home Delivery</b>
@@ -62,17 +48,10 @@
   </div>
 </main>
 
-<footer class="footer">
-  <div class="container footer-grid">
-    <div><div class="logo logo-light">DriveGo<span class="logo-dot">.</span></div><p class="muted">Rent. Drive. Repeat.</p></div>
-    <div><h4>Company</h4><a href="index.html">About</a><a href="cars.html">Cars</a><a href="cars.html">Locations</a></div>
-    <div><h4>Support</h4><a href="index.html">Contact</a><a href="index.html">Terms</a><a href="index.html">Privacy</a></div>
-    <div><h4>Contact (demo)</h4><p class="muted">hello@drivego.demo<br>+91 98765 43210</p></div>
-  </div>
-  <div class="container footer-bottom">© 2026 DriveGo (frontend prototype) · Mock data only</div>
-</footer>
+<div id="siteFoot"></div>
 
 <script src="data.js"></script>
+<script src="components.js"></script>
 <script src="site.js"></script>
 </body>
 </html>

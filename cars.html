@@ -3,35 +3,22 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>DriveGo — Search Cars</title>
+<title>DriveGo - Search Cars</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css" />
 </head>
-<body data-page="cars">
+<body data-page="cars" data-nav="cars" data-footer="dark">
 
-<header class="nav">
-  <div class="container nav-inner">
-    <a href="index.html" class="logo">DriveGo<span class="logo-dot">.</span></a>
-    <nav class="nav-links" id="navLinks">
-      <a href="index.html">Home</a><a href="cars.html" class="active">Cars</a><a href="cars.html">Locations</a>
-      <a href="index.html#how">How It Works</a><a href="my-bookings.html">My Bookings</a><a href="admin.html">Admin</a>
-    </nav>
-    <div class="nav-actions">
-      <a href="login.html" class="btn btn-ghost">Login</a>
-      <a href="cars.html" class="btn btn-primary">Book a Car</a>
-      <button class="nav-toggle" id="navToggle" aria-label="Menu"><svg class="ic" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
-    </div>
-  </div>
-</header>
+<div id="siteNav"></div>
 
 <main class="container">
-  <section class="section">
+  <section class="section page-head">
+    <span class="eyebrow">SEARCH RESULTS</span>
     <h2 id="carsTitle">Cars available in Salt Lake</h2>
-    <p class="muted small" id="carsSub"></p>
+    <p class="muted" id="carsSub"></p>
   </section>
 
-  <!-- SEARCH CONTROLS (static HTML) -->
-  <form class="search-card" data-search action="cars.html" method="get">
+  <form class="search-card search-compact" data-search action="cars.html" method="get">
     <div class="search-grid">
       <div class="field"><label>Location</label>
         <select name="location"><option>Kolkata</option><option selected>Salt Lake</option><option>New Town</option><option>Howrah</option><option>Kolkata Airport</option></select></div>
@@ -44,38 +31,34 @@
   </form>
 
   <div class="two-col">
-    <!-- FILTERS (static HTML; JS only re-renders cards from data.js) -->
-    <aside class="panel">
-      <h3>Filters</h3>
-      <div class="field"><label>Max price/day: <span id="priceVal">₹3,000</span></label>
+    <aside class="panel filter-panel">
+      <h3><svg class="ic" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>Filters</h3>
+      <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></svg>Max price/day: <span id="priceVal">₹3,000</span></label>
         <input id="fPrice" type="range" min="1000" max="3000" step="100" value="3000" /></div>
-      <div class="field"><label>Car type</label>
+      <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>Car type</label>
         <select id="fType"><option>All</option><option>SUV</option><option>Hatchback</option><option>Sedan</option></select></div>
-      <div class="field"><label>Seats</label>
+      <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Seats</label>
         <select id="fSeats"><option>Any</option><option>5</option><option>7</option></select></div>
-      <div class="field"><label>Transmission</label>
+      <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>Transmission</label>
         <select id="fTrans"><option>Any</option><option>Automatic</option><option>Manual</option></select></div>
-      <div class="field"><label>Fuel type</label>
+      <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><line x1="3" x2="15" y1="22" y2="22"/><line x1="4" x2="14" y1="9" y2="9"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9.83a2 2 0 0 0-.59-1.42L18 5"/></svg>Fuel type</label>
         <select id="fFuel"><option>Any</option><option>Petrol</option><option>Diesel</option></select></div>
-      <div class="field"><label>Sort</label>
-        <select id="fSort"><option value="Recommended">Recommended</option><option value="Low">Price Low → High</option><option value="High">Price High → Low</option></select></div>
     </aside>
-    <!-- CAR CARDS injected by site.js from data.js -->
-    <div><div class="car-grid cols-2" id="carsGrid"></div></div>
+    <div>
+      <div class="results-bar">
+        <p class="muted small"><b id="carsCount">-</b> cars found</p>
+        <div class="field sort-field"><label for="fSort">Sort</label>
+          <select id="fSort"><option value="Recommended">Recommended</option><option value="Low">Price Low → High</option><option value="High">Price High → Low</option></select></div>
+      </div>
+      <div class="car-grid cols-2" id="carsGrid"></div>
+    </div>
   </div>
 </main>
 
-<footer class="footer">
-  <div class="container footer-grid">
-    <div><div class="logo logo-light">DriveGo<span class="logo-dot">.</span></div><p class="muted">Rent. Drive. Repeat.</p></div>
-    <div><h4>Company</h4><a href="index.html">About</a><a href="cars.html">Cars</a><a href="cars.html">Locations</a></div>
-    <div><h4>Support</h4><a href="index.html">Contact</a><a href="index.html">Terms</a><a href="index.html">Privacy</a></div>
-    <div><h4>Contact (demo)</h4><p class="muted">hello@drivego.demo<br>+91 98765 43210</p></div>
-  </div>
-  <div class="container footer-bottom">© 2026 DriveGo (frontend prototype) · Mock data only</div>
-</footer>
+<div id="siteFoot"></div>
 
 <script src="data.js"></script>
+<script src="components.js"></script>
 <script src="site.js"></script>
 </body>
 </html>

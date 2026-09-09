@@ -3,26 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>DriveGo — Admin Dashboard</title>
+<title>DriveGo - Admin Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css" />
 </head>
-<body data-page="admin">
+<body data-page="admin" data-nav="admin" data-footer="dark">
 
-<header class="nav">
-  <div class="container nav-inner">
-    <a href="index.html" class="logo">DriveGo<span class="logo-dot">.</span></a>
-    <nav class="nav-links" id="navLinks">
-      <a href="index.html">Home</a><a href="cars.html">Cars</a><a href="cars.html">Locations</a>
-      <a href="index.html#how">How It Works</a><a href="my-bookings.html">My Bookings</a><a href="admin.html" class="active">Admin</a>
-    </nav>
-    <div class="nav-actions">
-      <a href="login.html" class="btn btn-ghost">Login</a>
-      <a href="cars.html" class="btn btn-primary">Book a Car</a>
-      <button class="nav-toggle" id="navToggle" aria-label="Menu"><svg class="ic" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
-    </div>
-  </div>
-</header>
+<div id="siteNav"></div>
 
 <main class="container">
   <div class="section">
@@ -30,7 +17,6 @@
   </div>
 
   <div class="admin-layout">
-    <!-- STATIC sidebar -->
     <aside class="sidebar">
       <a href="admin.html" class="on">Dashboard</a><a href="admin.html">Bookings</a><a href="admin.html">Cars</a>
       <a href="admin.html">Locations</a><a href="admin.html">Customers</a><a href="admin.html">Documents</a>
@@ -38,12 +24,11 @@
     </aside>
 
     <div>
-      <!-- STATIC stat cards; numbers filled by site.js from data.js -->
       <div class="stat-grid">
-        <div class="stat"><span class="muted small">Total Cars</span><b id="stCars">–</b></div>
-        <div class="stat"><span class="muted small">Available Cars</span><b id="stAvail">–</b></div>
-        <div class="stat"><span class="muted small">Active Bookings</span><b id="stBk">–</b></div>
-        <div class="stat"><span class="muted small">Revenue</span><b id="stRev">–</b></div>
+        <div class="stat"><div class="stat-ico"><svg class="ic" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg></div><span class="muted small">Total Cars</span><b id="stCars">-</b></div>
+        <div class="stat"><div class="stat-ico g"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></div><span class="muted small">Available Cars</span><b id="stAvail">-</b></div>
+        <div class="stat"><div class="stat-ico a"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><span class="muted small">Active Bookings</span><b id="stBk">-</b></div>
+        <div class="stat"><div class="stat-ico d"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg></div><span class="muted small">Revenue</span><b id="stRev">-</b></div>
       </div>
 
       <div class="panel">
@@ -64,17 +49,10 @@
   </div>
 </main>
 
-<footer class="footer">
-  <div class="container footer-grid">
-    <div><div class="logo logo-light">DriveGo<span class="logo-dot">.</span></div><p class="muted">Rent. Drive. Repeat.</p></div>
-    <div><h4>Company</h4><a href="index.html">About</a><a href="cars.html">Cars</a><a href="cars.html">Locations</a></div>
-    <div><h4>Support</h4><a href="index.html">Contact</a><a href="index.html">Terms</a><a href="index.html">Privacy</a></div>
-    <div><h4>Contact (demo)</h4><p class="muted">hello@drivego.demo<br>+91 98765 43210</p></div>
-  </div>
-  <div class="container footer-bottom">© 2026 DriveGo (frontend prototype) · Mock data only</div>
-</footer>
+<div id="siteFoot"></div>
 
 <script src="data.js"></script>
+<script src="components.js"></script>
 <script src="site.js"></script>
 </body>
 </html>
