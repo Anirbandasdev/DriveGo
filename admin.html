@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DriveGo — Admin Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="admin">
+
+<header class="nav">
+  <div class="container nav-inner">
+    <a href="index.html" class="logo">DriveGo<span class="logo-dot">.</span></a>
+    <nav class="nav-links" id="navLinks">
+      <a href="index.html">Home</a><a href="cars.html">Cars</a><a href="cars.html">Locations</a>
+      <a href="index.html#how">How It Works</a><a href="my-bookings.html">My Bookings</a><a href="admin.html" class="active">Admin</a>
+    </nav>
+    <div class="nav-actions">
+      <a href="login.html" class="btn btn-ghost">Login</a>
+      <a href="cars.html" class="btn btn-primary">Book a Car</a>
+      <button class="nav-toggle" id="navToggle" aria-label="Menu"><svg class="ic" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <div class="section">
+    <h2>Admin Dashboard <span class="badge info">demo · mock data</span></h2>
+  </div>
+
+  <div class="admin-layout">
+    <!-- STATIC sidebar -->
+    <aside class="sidebar">
+      <a href="admin.html" class="on">Dashboard</a><a href="admin.html">Bookings</a><a href="admin.html">Cars</a>
+      <a href="admin.html">Locations</a><a href="admin.html">Customers</a><a href="admin.html">Documents</a>
+      <a href="admin.html">Payments</a><a href="admin.html">Settings</a>
+    </aside>
+
+    <div>
+      <!-- STATIC stat cards; numbers filled by site.js from data.js -->
+      <div class="stat-grid">
+        <div class="stat"><span class="muted small">Total Cars</span><b id="stCars">–</b></div>
+        <div class="stat"><span class="muted small">Available Cars</span><b id="stAvail">–</b></div>
+        <div class="stat"><span class="muted small">Active Bookings</span><b id="stBk">–</b></div>
+        <div class="stat"><span class="muted small">Revenue</span><b id="stRev">–</b></div>
+      </div>
+
+      <div class="panel">
+        <h3>Recent Bookings</h3>
+        <div style="overflow-x:auto">
+          <table>
+            <tr><th>Customer</th><th>Car</th><th>Location</th><th>Dates</th><th>Amount</th><th>Status</th></tr>
+            <tbody id="recentRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:14px">
+        <div class="panel"><h3>Car Availability</h3><div id="availBox"></div></div>
+        <div class="panel"><h3>Location Overview</h3><div id="locBox"></div></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="container footer-grid">
+    <div><div class="logo logo-light">DriveGo<span class="logo-dot">.</span></div><p class="muted">Rent. Drive. Repeat.</p></div>
+    <div><h4>Company</h4><a href="index.html">About</a><a href="cars.html">Cars</a><a href="cars.html">Locations</a></div>
+    <div><h4>Support</h4><a href="index.html">Contact</a><a href="index.html">Terms</a><a href="index.html">Privacy</a></div>
+    <div><h4>Contact (demo)</h4><p class="muted">hello@drivego.demo<br>+91 98765 43210</p></div>
+  </div>
+  <div class="container footer-bottom">© 2026 DriveGo (frontend prototype) · Mock data only</div>
+</footer>
+
+<script src="data.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

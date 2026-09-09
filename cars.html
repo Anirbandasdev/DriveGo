@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DriveGo — Search Cars</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="cars">
+
+<header class="nav">
+  <div class="container nav-inner">
+    <a href="index.html" class="logo">DriveGo<span class="logo-dot">.</span></a>
+    <nav class="nav-links" id="navLinks">
+      <a href="index.html">Home</a><a href="cars.html" class="active">Cars</a><a href="cars.html">Locations</a>
+      <a href="index.html#how">How It Works</a><a href="my-bookings.html">My Bookings</a><a href="admin.html">Admin</a>
+    </nav>
+    <div class="nav-actions">
+      <a href="login.html" class="btn btn-ghost">Login</a>
+      <a href="cars.html" class="btn btn-primary">Book a Car</a>
+      <button class="nav-toggle" id="navToggle" aria-label="Menu"><svg class="ic" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <section class="section">
+    <h2 id="carsTitle">Cars available in Salt Lake</h2>
+    <p class="muted small" id="carsSub"></p>
+  </section>
+
+  <!-- SEARCH CONTROLS (static HTML) -->
+  <form class="search-card" data-search action="cars.html" method="get">
+    <div class="search-grid">
+      <div class="field"><label>Location</label>
+        <select name="location"><option>Kolkata</option><option selected>Salt Lake</option><option>New Town</option><option>Howrah</option><option>Kolkata Airport</option></select></div>
+      <div class="field"><label>Pickup date</label><input name="pickupDate" type="date" value="2026-09-15" /></div>
+      <div class="field"><label>Pickup time</label><input name="pickupTime" type="time" value="10:00" /></div>
+      <div class="field"><label>Drop date</label><input name="dropDate" type="date" value="2026-09-18" /></div>
+      <div class="field"><label>Drop time</label><input name="dropTime" type="time" value="18:00" /></div>
+      <div><button class="btn btn-primary" type="submit">Search Cars</button></div>
+    </div>
+  </form>
+
+  <div class="two-col">
+    <!-- FILTERS (static HTML; JS only re-renders cards from data.js) -->
+    <aside class="panel">
+      <h3>Filters</h3>
+      <div class="field"><label>Max price/day: <span id="priceVal">₹3,000</span></label>
+        <input id="fPrice" type="range" min="1000" max="3000" step="100" value="3000" /></div>
+      <div class="field"><label>Car type</label>
+        <select id="fType"><option>All</option><option>SUV</option><option>Hatchback</option><option>Sedan</option></select></div>
+      <div class="field"><label>Seats</label>
+        <select id="fSeats"><option>Any</option><option>5</option><option>7</option></select></div>
+      <div class="field"><label>Transmission</label>
+        <select id="fTrans"><option>Any</option><option>Automatic</option><option>Manual</option></select></div>
+      <div class="field"><label>Fuel type</label>
+        <select id="fFuel"><option>Any</option><option>Petrol</option><option>Diesel</option></select></div>
+      <div class="field"><label>Sort</label>
+        <select id="fSort"><option value="Recommended">Recommended</option><option value="Low">Price Low → High</option><option value="High">Price High → Low</option></select></div>
+    </aside>
+    <!-- CAR CARDS injected by site.js from data.js -->
+    <div><div class="car-grid cols-2" id="carsGrid"></div></div>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="container footer-grid">
+    <div><div class="logo logo-light">DriveGo<span class="logo-dot">.</span></div><p class="muted">Rent. Drive. Repeat.</p></div>
+    <div><h4>Company</h4><a href="index.html">About</a><a href="cars.html">Cars</a><a href="cars.html">Locations</a></div>
+    <div><h4>Support</h4><a href="index.html">Contact</a><a href="index.html">Terms</a><a href="index.html">Privacy</a></div>
+    <div><h4>Contact (demo)</h4><p class="muted">hello@drivego.demo<br>+91 98765 43210</p></div>
+  </div>
+  <div class="container footer-bottom">© 2026 DriveGo (frontend prototype) · Mock data only</div>
+</footer>
+
+<script src="data.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

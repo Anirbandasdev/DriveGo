@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DriveGo — Car Details</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="details">
+
+<header class="nav">
+  <div class="container nav-inner">
+    <a href="index.html" class="logo">DriveGo<span class="logo-dot">.</span></a>
+    <nav class="nav-links" id="navLinks">
+      <a href="index.html">Home</a><a href="cars.html" class="active">Cars</a><a href="cars.html">Locations</a>
+      <a href="index.html#how">How It Works</a><a href="my-bookings.html">My Bookings</a><a href="admin.html">Admin</a>
+    </nav>
+    <div class="nav-actions">
+      <a href="login.html" class="btn btn-ghost">Login</a>
+      <a href="cars.html" class="btn btn-primary">Book a Car</a>
+      <button class="nav-toggle" id="navToggle" aria-label="Menu"><svg class="ic" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <section class="section">
+    <a href="cars.html" class="small">← Back to results</a>
+    <!-- Title / specs filled by site.js from data.js (?id=) -->
+    <h2 style="margin-top:8px" id="carTitle">Car</h2>
+    <p class="muted" id="carSub"></p>
+  </section>
+
+  <div class="detail-layout">
+    <div>
+      <img class="main" id="carImg" src="" alt="Car" />
+      <div class="panel" style="margin-top:14px">
+        <h3>Features</h3>
+        <div class="specs" id="carFeatures"></div>
+        <h3 style="margin-top:12px">Rental policy (demo)</h3>
+        <p class="small muted">Valid driving license required · Fuel on return basis · 200 km/day included.</p>
+        <h3 style="margin-top:12px">Cancellation (demo)</h3>
+        <p class="small muted">Free cancellation up to 24 hrs before pickup.</p>
+        <h3 style="margin-top:12px">Location</h3>
+        <p class="small muted" id="carLocation"></p>
+      </div>
+    </div>
+
+    <!-- BOOKING WIDGET (static HTML; values filled by site.js) -->
+    <aside class="panel book-widget">
+      <div class="price"><b style="font-size:1.5rem" id="carPrice">₹0</b><span class="muted">/day</span></div>
+      <div style="margin:8px 0" id="carBadge"></div>
+      <div class="field"><label>Pickup location</label>
+        <select><option>Kolkata</option><option selected>Salt Lake</option><option>New Town</option><option>Howrah</option><option>Kolkata Airport</option></select></div>
+      <div class="form-row" style="margin-top:8px">
+        <div class="field"><label>Pickup date</label><input type="date" value="2026-09-15" /></div>
+        <div class="field"><label>Time</label><input type="time" value="10:00" /></div>
+      </div>
+      <div class="form-row" style="margin-top:8px">
+        <div class="field"><label>Drop date</label><input type="date" value="2026-09-18" /></div>
+        <div class="field"><label>Time</label><input type="time" value="18:00" /></div>
+      </div>
+      <div style="margin:12px 0"><span id="availState" class="badge ok"></span></div>
+      <a class="btn btn-primary btn-block" id="continueBtn" href="booking.html">Continue Booking</a>
+      <a class="btn btn-ghost btn-block" style="margin-top:8px" href="cars.html">See alternatives</a>
+    </aside>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="container footer-grid">
+    <div><div class="logo logo-light">DriveGo<span class="logo-dot">.</span></div><p class="muted">Rent. Drive. Repeat.</p></div>
+    <div><h4>Company</h4><a href="index.html">About</a><a href="cars.html">Cars</a><a href="cars.html">Locations</a></div>
+    <div><h4>Support</h4><a href="index.html">Contact</a><a href="index.html">Terms</a><a href="index.html">Privacy</a></div>
+    <div><h4>Contact (demo)</h4><p class="muted">hello@drivego.demo<br>+91 98765 43210</p></div>
+  </div>
+  <div class="container footer-bottom">© 2026 DriveGo (frontend prototype) · Mock data only</div>
+</footer>
+
+<script src="data.js"></script>
+<script src="site.js"></script>
+</body>
+</html>
