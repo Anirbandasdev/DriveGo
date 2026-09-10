@@ -2711,3 +2711,193 @@ body[data-page="home"] .section {
     flex: 1
   }
 }
+
+.flow {
+  max-width: 680px;
+  margin-inline: auto
+}
+
+.flow>h2,
+.flow>p {
+  text-align: center
+}
+
+.flow>h2 {
+  font-size: 1.9rem
+}
+
+.flow .panel {
+  border-radius: 20px
+}
+
+.progress {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 10px 0 6px;
+  margin: 6px 0 28px;
+  justify-content: safe center;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none
+}
+
+.progress::-webkit-scrollbar {
+  display: none
+}
+
+.p-arrow {
+  display: none
+}
+
+.p-step {
+  flex: 1 0 auto;
+  min-width: 104px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  font-size: .75rem;
+  position: relative;
+  text-align: center;
+  padding: 0 6px
+}
+
+.p-step::before {
+  content: "";
+  position: absolute;
+  top: 17px;
+  left: calc(-50% + 26px);
+  right: calc(50% + 26px);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line)
+}
+
+.p-step:first-child::before {
+  display: none
+}
+
+.p-step.done::before,
+.p-step.now::before {
+  background: var(--green)
+}
+
+.p-dot {
+  width: 36px;
+  height: 36px;
+  font-size: .85rem;
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  border: 2px solid var(--line)
+}
+
+.p-step.done .p-dot {
+  border-color: var(--green)
+}
+
+.p-step.now {
+  color: var(--ink)
+}
+
+.check {
+  animation: pop .35s ease-out
+}
+
+@keyframes pop {
+  from {
+    transform: scale(.6);
+    opacity: 0
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1
+  }
+}
+
+.success-wrap {
+  border-radius: 22px
+}
+
+@media(max-width:600px) {
+  .flow>h2 {
+    font-size: 1.55rem
+  }
+
+  .p-step {
+    min-width: 92px;
+    font-size: .68rem
+  }
+
+  .p-dot {
+    width: 32px;
+    height: 32px
+  }
+
+  .p-step::before {
+    top: 16px;
+    left: calc(-50% + 24px);
+    right: calc(50% + 24px)
+  }
+}
+
+.sum-line {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 0;
+  border-bottom: 1px dashed var(--line);
+  text-align: left
+}
+
+.sum-line>div {
+  flex: 1;
+  min-width: 0
+}
+
+.sum-line b {
+  display: block;
+  font-size: .95rem
+}
+
+.sum-line .muted.small {
+  display: block;
+  margin-top: 1px
+}
+
+.sum-ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0
+}
+
+.sum-ico .ic {
+  width: 19px;
+  height: 19px
+}
+
+.sum-check {
+  width: 24px;
+  height: 24px;
+  color: var(--green);
+  flex-shrink: 0
+}
+
+.sum-check .ic {
+  width: 24px;
+  height: 24px
+}
+
+.sum-val {
+  font-weight: 600;
+  font-size: .92rem;
+  text-align: right;
+  flex-shrink: 0
+}
