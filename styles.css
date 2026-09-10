@@ -2901,3 +2901,48 @@ body[data-page="home"] .section {
   text-align: right;
   flex-shrink: 0
 }
+
+body {
+  text-wrap: pretty
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance
+}
+
+.car-rate,
+.price b,
+.stat b,
+.pay-total b,
+.total-row b,
+.hero-stats b,
+#payTotal {
+  font-variant-numeric: tabular-nums
+}
+
+.btn-primary:hover {
+  box-shadow: 0 8px 18px -8px rgba(20, 110, 245, .55)
+}
+
+@media print {
+
+  #siteNav,
+  #siteFoot,
+  .btn,
+  button {
+    display: none !important
+  }
+
+  body {
+    background: #fff
+  }
+
+  .success-wrap,
+  .panel,
+  .form-card {
+    box-shadow: none;
+    border: 1px solid #ddd
+  }
+}
