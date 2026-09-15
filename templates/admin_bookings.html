@@ -8,7 +8,7 @@
 </div>
 
 <div class="panel">
-  <div style="overflow-x:auto">
+  <div class="table-wrap">
     <table>
       <tr><th>Booking</th><th>Car</th><th>Customer</th><th>Period</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
       {% for b in bookings_list %}
@@ -20,7 +20,7 @@
         <td>₹{{ b.total_amount }}<br /><span class="small muted">{{ b.payment_status }}</span></td>
         <td><span class="badge {% if b.status == 'CONFIRMED' or b.status == 'ACTIVE' %}ok{% elif b.status == 'COMPLETED' %}info{% elif b.status == 'PENDING_VERIFICATION' %}warn{% else %}no{% endif %}">{{ b.get_status_display }}</span></td>
         <td>
-          <div class="panel-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="panel-actions">
             {% if b.status == 'CONFIRMED' %}
             <form action="{% url 'admin_trip_action' b.booking_id 'start' %}" method="post">{% csrf_token %}<button class="btn btn-sm" type="submit">Start trip</button></form>
             {% endif %}
@@ -30,7 +30,7 @@
             {% if b.status != 'COMPLETED' and b.status != 'CANCELLED' and b.status != 'REJECTED' %}
             <form action="{% url 'admin_cancel_booking' b.booking_id %}" method="post">{% csrf_token %}<button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('Cancel this booking? Paid amount is marked refunded.')">Cancel</button></form>
             {% endif %}
-            <form action="{% url 'admin_set_note' b.booking_id %}" method="post" style="display:flex;gap:6px;align-items:center">{% csrf_token %}
+            <form action="{% url 'admin_set_note' b.booking_id %}" method="post" class="inline-form">{% csrf_token %}
               <input type="text" name="note" placeholder="note…" value="{{ b.admin_note }}" class="note-input" />
               <button class="btn btn-sm btn-ghost" type="submit">Note</button>
             </form>
