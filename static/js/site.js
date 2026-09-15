@@ -1,6 +1,35 @@
 function bindNav() {
-  var t = document.getElementById("navToggle"), n = document.getElementById("navLinks");
-  if (t && n) t.addEventListener("click", function () { n.classList.toggle("open"); });
+  var t = document.getElementById("navToggle");
+  var n = document.getElementById("navLinks");
+  var c = document.getElementById("navClose");
+  var b = document.getElementById("navBackdrop");
+  if (!t || !n) return;
+
+  function setOpen(next) {
+    n.classList.toggle("open", next);
+    t.setAttribute("aria-expanded", next ? "true" : "false");
+    document.body.classList.toggle("nav-open", next);
+    if (b) {
+      b.hidden = !next;
+      b.classList.toggle("open", next);
+    }
+  }
+
+  t.addEventListener("click", function () {
+    setOpen(!n.classList.contains("open"));
+  });
+
+  if (c) c.addEventListener("click", function () { setOpen(false); });
+  if (b) b.addEventListener("click", function () { setOpen(false); });
+  n.querySelectorAll("a").forEach(function (el) {
+    el.addEventListener("click", function () { setOpen(false); });
+  });
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") setOpen(false);
+  });
+  window.addEventListener("resize", function () {
+    if (window.innerWidth > 600 && n.classList.contains("open")) setOpen(false);
+  });
 }
 
 var PLACEHOLDER = "data:image/svg+xml," + encodeURIComponent(
