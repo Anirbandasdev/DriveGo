@@ -3823,7 +3823,10 @@ h3 {
   padding: 28px 16px;
   color: var(--muted);
   font-size: .9rem;
-  font-weight: 600
+  font-weight: 600;
+  text-align: center;
+  flex-wrap: wrap;
+  line-height: 1.4
 }
 
 .spinner {
@@ -3848,7 +3851,9 @@ h3 {
   gap: 12px;
   font-weight: 700;
   font-size: 1rem;
-  color: var(--ink)
+  color: var(--ink);
+  padding: 20px;
+  text-align: center
 }
 
 .auth-loader[hidden] {
@@ -3859,6 +3864,25 @@ h3 {
   width: 26px;
   height: 26px;
   border-width: 3px
+}
+
+#clerkBox,
+#clerkBox > * {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0
+}
+
+#clerkBox iframe {
+  width: 100%;
+  max-width: 100%
+}
+
+.auth-form .cl-rootBox,
+.auth-form .cl-cardBox,
+.auth-form .cl-card {
+  width: 100% !important;
+  max-width: 100% !important
 }
 
 .errorlist {
@@ -4065,5 +4089,75 @@ h3 {
   .reject-form,
   .note-form {
     flex-wrap: wrap
+  }
+}
+
+@media(max-width:600px) {
+  .panel,
+  .search-card,
+  .form-card,
+  .success-wrap {
+    border-radius: 18px;
+    padding: 20px 16px
+  }
+
+  .booking-id {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    text-align: center;
+    word-break: break-word
+  }
+
+  .sum-line {
+    flex-wrap: wrap;
+    align-items: flex-start
+  }
+
+  .sum-val {
+    width: 100%;
+    text-align: left;
+    padding-left: 54px
+  }
+
+  .price-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap
+  }
+
+  .price-actions .btn {
+    flex: 1 1 auto
+  }
+
+  .bk-car {
+    align-items: flex-start
+  }
+
+  .bk-car img {
+    width: 96px;
+    height: 72px
+  }
+
+  .pay-opt {
+    align-items: flex-start
+  }
+
+  .pay-opt.sel {
+    padding-right: 40px
+  }
+
+  .auth-loader {
+    font-size: .92rem
+  }
+
+  .auth-loader .spinner {
+    width: 22px;
+    height: 22px
+  }
+
+  .toast {
+    align-items: flex-start
   }
 }
