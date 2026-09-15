@@ -3,10 +3,10 @@
     <a href="{% url 'home' %}" class="logo-wrap"><span class="logo">DriveGo<span class="logo-dot">.</span></span><span class="nav-tag">Rent. Drive. Repeat.</span></a>
     {% with active=request.resolver_match.url_name %}
     <nav class="nav-links" id="navLinks">
+      {% if current_customer and current_customer.is_admin %}<a href="{% url 'admin_dashboard' %}"{% if active in 'admin_dashboard,admin_verifications,admin_bookings,admin_customers,admin_cars,admin_locations,admin_blocks' %} class="active"{% endif %}>Admin</a>{% endif %}
       <a href="{% url 'home' %}"{% if active == 'home' %} class="active"{% endif %}>Home</a>
       <a href="{% url 'cars' %}"{% if active in 'cars,car_detail,booking_dates,verification,delivery,summary,payment,confirmation' %} class="active"{% endif %}>Cars</a>
       <a href="{% url 'my_bookings' %}"{% if active == 'my_bookings' %} class="active"{% endif %}>My Bookings</a>
-      {% if current_customer and current_customer.is_admin %}<a href="{% url 'admin_dashboard' %}"{% if active == 'admin_dashboard' %} class="active"{% endif %}>Admin</a>{% endif %}
     </nav>
     {% endwith %}
     <div class="nav-actions">

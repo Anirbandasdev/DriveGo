@@ -1490,6 +1490,10 @@ tbody tr:hover {
   align-items: start
 }
 
+.admin-content {
+  min-width: 0
+}
+
 .sidebar {
   background: var(--dark);
   color: #9AA3B2;
@@ -1726,6 +1730,36 @@ tbody tr:hover {
     position: static
   }
 
+  .admin-layout {
+    gap: 16px
+  }
+
+  .sidebar {
+    order: -1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 10px;
+    overflow-x: auto;
+    white-space: nowrap;
+    border-radius: 14px
+  }
+
+  .sidebar .small,
+  .sidebar hr {
+    display: none
+  }
+
+  .sidebar a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 8px 12px;
+    font-size: .82rem;
+    flex-shrink: 0
+  }
+
   .stat-grid {
     grid-template-columns: 1fr 1fr
   }
@@ -1757,7 +1791,19 @@ tbody tr:hover {
     height: 64px
   }
 
+  .logo-wrap {
+    min-width: 0
+  }
+
+  .nav-tag {
+    display: none
+  }
+
   .nav-actions .btn-ghost {
+    display: none
+  }
+
+  .nav-actions .btn-primary {
     display: none
   }
 
@@ -2690,6 +2736,12 @@ body[data-page="home"] {
 
   .sf-grid {
     grid-template-columns: 1fr 1fr
+  }
+}
+
+@media(max-width:420px) {
+  .nav-search {
+    display: none
   }
 }
 
