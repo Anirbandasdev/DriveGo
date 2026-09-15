@@ -38,10 +38,10 @@
   {% endwith %}
 
   {% if b.status == 'PENDING' or b.status == 'PENDING_VERIFICATION' %}
-  <div class="panel-actions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+  <div class="panel-actions">
     <form action="{% url 'admin_approve_docs' b.booking_id %}" method="post">{% csrf_token %}<button class="btn btn-primary" type="submit">✓ Approve &amp; Confirm</button></form>
-    <form action="{% url 'admin_reject_docs' b.booking_id %}" method="post" style="display:flex;gap:8px;align-items:center">{% csrf_token %}
-      <input type="text" name="reason" placeholder="Rejection reason…" required style="min-width:180px" />
+    <form action="{% url 'admin_reject_docs' b.booking_id %}" method="post" class="inline-form">{% csrf_token %}
+      <input type="text" name="reason" placeholder="Rejection reason…" required />
       <button class="btn btn-danger" type="submit">Reject</button>
     </form>
     <form action="{% url 'admin_cancel_booking' b.booking_id %}" method="post">{% csrf_token %}<button class="btn btn-ghost" type="submit" onclick="return confirm('Cancel this booking? Paid amount is marked refunded.')">Cancel &amp; Refund</button></form>

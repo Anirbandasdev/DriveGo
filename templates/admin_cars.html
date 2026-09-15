@@ -18,9 +18,9 @@
   {% for car in all_cars %}
   <div class="kv">
     <span>{{ car }} <span class="muted small">{{ car.location.name }}</span></span>
-    <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span class="table-actions">
       <span class="badge {% if car.status == 'AVAILABLE' %}ok{% elif car.status == 'MAINTENANCE' %}warn{% else %}no{% endif %}">{{ car.get_status_display }}</span>
-      <form action="{% url 'admin_set_car_status' car.pk %}" method="post" style="display:flex;gap:6px;align-items:center">{% csrf_token %}
+      <form action="{% url 'admin_set_car_status' car.pk %}" method="post" class="inline-form">{% csrf_token %}
         <select name="status" class="mini-select">
           {% for val, label in car.STATUS_CHOICES %}<option value="{{ val }}"{% if car.status == val %} selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
