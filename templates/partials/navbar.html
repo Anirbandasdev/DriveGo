@@ -2,11 +2,23 @@
   <div class="container nav-inner">
     <a href="{% url 'home' %}" class="logo-wrap"><span class="logo">DriveGo<span class="logo-dot">.</span></span><span class="nav-tag">Rent. Drive. Repeat.</span></a>
     {% with active=request.resolver_match.url_name %}
-    <nav class="nav-links" id="navLinks">
+    <nav class="nav-links" id="navLinks" aria-label="Primary navigation">
+      <div class="mobile-nav-head">
+        <span>Menu</span>
+        <button type="button" class="mobile-nav-close" id="navClose" aria-label="Close menu">✕</button>
+      </div>
       {% if current_customer and current_customer.is_admin %}<a href="{% url 'admin_dashboard' %}"{% if active in 'admin_dashboard,admin_verifications,admin_bookings,admin_customers,admin_cars,admin_locations,admin_blocks' %} class="active"{% endif %}>Admin</a>{% endif %}
       <a href="{% url 'home' %}"{% if active == 'home' %} class="active"{% endif %}>Home</a>
       <a href="{% url 'cars' %}"{% if active in 'cars,car_detail,booking_dates,verification,delivery,summary,payment,confirmation' %} class="active"{% endif %}>Cars</a>
       <a href="{% url 'my_bookings' %}"{% if active == 'my_bookings' %} class="active"{% endif %}>My Bookings</a>
+      <div class="mobile-nav-foot">
+        {% if current_customer %}
+        <a href="{% url 'profile' %}" class="mobile-profile-chip">{% if current_customer.profile_image_url %}<img src="{{ current_customer.profile_image_url }}" alt="Profile" />{% else %}<span>{{ current_customer.full_name|default:current_customer.email|default:"D"|slice:":1"|upper }}</span>{% endif %}<b>{{ current_customer.full_name|default:"My Profile" }}</b></a>
+        {% else %}
+        <a href="{% url 'login' %}" class="mobile-auth-link">Login to your account</a>
+        {% endif %}
+        <a href="{% url 'cars' %}" class="btn btn-primary mobile-cta">Book a Car</a>
+      </div>
     </nav>
     {% endwith %}
     <div class="nav-actions">
@@ -17,7 +29,8 @@
       <a href="{% url 'login' %}" class="btn btn-ghost">Login</a>
       {% endif %}
       <a href="{% url 'cars' %}" class="btn btn-primary">Book a Car</a>
-      <button class="nav-toggle" id="navToggle" aria-label="Menu"><svg class="ic" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
+      <button class="nav-toggle" id="navToggle" aria-label="Menu" aria-controls="navLinks" aria-expanded="false"><svg class="ic" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
     </div>
   </div>
+  <div class="nav-backdrop" id="navBackdrop" hidden></div>
 </header>
