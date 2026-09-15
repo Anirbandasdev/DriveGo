@@ -1,0 +1,33 @@
+{% extends "admin_base.html" %}
+{% block admin_title %}DriveGo - Admin Locations{% endblock %}
+{% block admin_content %}
+<div class="section">
+  <span class="eyebrow">CONTROL CENTER</span>
+  <h2>Pickup Locations</h2>
+  <p class="small muted">Each location's fleet size, how many cars are currently out on a trip, and total bookings.</p>
+</div>
+
+<div class="panel">
+  <h3>Locations</h3>
+  {% for row in locations %}
+  <div class="kv"><span><b>{{ row.location.name }}</b><br /><span class="small muted">{{ row.location.address|default:"" }}</span></span>
+    <span class="small muted">{{ row.cars }} cars · {{ row.booked }} on trip · {{ row.bookings }} bookings</span>
+  </div>
+  {% empty %}
+  <p class="small muted">No locations yet.</p>
+  {% endfor %}
+  {% for loc in all_locations %}{% if not loc.is_active %}<div class="kv"><span>{{ loc.name }}</span><span class="badge no">inactive</span></div>{% endif %}{% endfor %}
+</div>
+
+<div class="panel">
+  <h3>Add Location</h3>
+  <form action="{% url 'admin_add_location' %}" method="post" class="admin-form">{% csrf_token %}
+    <label class="field"><span>Name</span><input type="text" name="name" required /></label>
+    <label class="field"><span>Address</span><input type="text" name="address" /></label>
+    <label class="field"><span>City</span><input type="text" name="city" value="Kolkata" /></label>
+    <label class="field"><span>Phone</span><input type="text" name="phone" /></label>
+    <label class="field"><span>Image URL</span><input type="url" name="image_url" /></label>
+    <button class="btn btn-primary" type="submit">Add Location</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block page %}delivery{% endblock %}
+{% block title %}DriveGo - Pickup or Delivery{% endblock %}
+{% block content %}
+<div class="section flow">
+  <div class="progress">
+    <span class="p-step done"><span class="p-dot">✓</span>1. Car</span><span class="p-arrow">→</span>
+    <span class="p-step done"><span class="p-dot">✓</span>2. Dates</span><span class="p-arrow">→</span>
+    <span class="p-step done"><span class="p-dot">✓</span>3. Verification</span><span class="p-arrow">→</span>
+    <span class="p-step now"><span class="p-dot">4</span>4. Delivery</span><span class="p-arrow">→</span>
+    <span class="p-step"><span class="p-dot">5</span>5. Payment</span>
+  </div>
+
+  <h2>How would you like to receive your car?</h2>
+
+  <form action="{% url 'delivery' booking.booking_id %}" method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="booked-note">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="choice-cards">
+      <label class="choice{% if form.delivery_method.value|default:booking.delivery_method == 'STORE_PICKUP' %} sel{% endif %}" data-method="store">
+        <input type="radio" name="delivery_method" value="STORE_PICKUP"{% if form.delivery_method.value|default:booking.delivery_method == 'STORE_PICKUP' %} checked{% endif %} hidden />
+        <b><svg class="ic" viewBox="0 0 24 24"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg>Pickup from Store</b>
+        <p class="small muted">{{ booking.pickup_location.address }}, {{ booking.pickup_location.city }}<br>Free · 9 AM - 9 PM</p>
+      </label>
+      <label class="choice{% if form.delivery_method.value|default:booking.delivery_method == 'HOME_DELIVERY' %} sel{% endif %}" data-method="home">
+        <input type="radio" name="delivery_method" value="HOME_DELIVERY"{% if form.delivery_method.value|default:booking.delivery_method == 'HOME_DELIVERY' %} checked{% endif %} hidden />
+        <b><svg class="ic" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Home Delivery</b>
+        <p class="small muted">Delivered to your door<br><b>Home delivery +₹{{ DELIVERY_CHARGE }}</b></p>
+      </label>
+    </div>
+
+    <div class="panel" id="addrForm"{% if form.delivery_method.value|default:booking.delivery_method != 'HOME_DELIVERY' %} style="display:none"{% endif %}>
+      <h3>Delivery address</h3>
+      <div class="field"><label>Address</label><input name="delivery_address" value="{{ form.delivery_address.value|default:booking.delivery_address }}" />{{ form.delivery_address.errors }}</div>
+      <div class="form-row" style="margin-top:8px">
+        <div class="field"><label>City</label><input name="delivery_city" value="{{ form.delivery_city.value|default:booking.delivery_city }}" />{{ form.delivery_city.errors }}</div>
+        <div class="field"><label>PIN code</label><input name="delivery_pincode" value="{{ form.delivery_pincode.value|default:booking.delivery_pincode }}" />{{ form.delivery_pincode.errors }}</div>
+      </div>
+      <div class="field" style="margin-top:8px"><label>Delivery instructions</label><textarea name="delivery_instructions">{{ form.delivery_instructions.value|default:booking.delivery_instructions }}</textarea></div>
+    </div>
+
+    <button class="btn btn-primary btn-block" style="margin-top:14px" type="submit">Continue</button>
+  </form>
+</div>
+{% endblock %}

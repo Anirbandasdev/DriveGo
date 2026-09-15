@@ -124,3 +124,110 @@ Stack: Python + Django + Django ORM + PostgreSQL/Supabase + Clerk auth + Razorpa
 ### Strict Phase-1 rules that were followed
 
 Frontend only · no `models.py`/`views.py`/`serializers.py`/migrations/DB/APIs · no Clerk/Razorpay/email/real verification · mock data only · reused empty setup (no packages installed) · no extra features beyond spec.
+
+---
+
+## 3. PHASE 2 — Django backend (IMPLEMENTED)
+
+Same pages, same design — now Django-rendered with a real database.
+
+```
+F:\car\
+├── manage.py
+├── drivego/            # settings (env-based), urls, wsgi, asgi
+├── rental/             # models, views, forms, urls, admin, utils, tests
+│   ├── management/commands/promote_admin.py
+│   └── migrations/
+├── templates/          # base.html, partials/, 14 pages (converted 1:1 from the prototype)
+├── static/css/styles.css + static/js/site.js   # same design, JS trimmed to UI-only
+├── requirements.txt / .env.example / .gitignore
+└── PROJECT_DOCS.md (this file)
+```
+
+### Setup
+
+```bash
+pip install -r requirements.txt
+copy .env.example .env        # fill in keys when available
+python manage.py migrate
+python manage.py runserver
+```
+
+Sign-in requires Clerk keys in `.env` (`CLERK_PUBLISHABLE_KEY` +
+`CLERK_SECRET_KEY`); there is no demo login fallback. To grant admin access,
+run `python manage.py promote_admin <clerk-user-id-or-email>`.
+Without Razorpay keys the payment page runs in clearly-labeled mock mode and
+still verifies server-side; add keys in `.env` for the live Razorpay flow.
+Without SMTP settings, emails print to the console. `DATABASE_URL` switches
+SQLite to Supabase PostgreSQL; Supabase Storage is used for documents when
+`SUPABASE_URL` + `SUPABASE_KEY` are set, otherwise files stay in `media/`.
+
+### Verified working
+
+- 18 automated tests pass (`python manage.py test rental`): overlap accept /
+  reject / non-overlap, maintenance blocked, server pricing (7500 + 300 + 18%
+  = 9204), booking-ID format, location filter, per-user booking isolation,
+  admin gating, navbar avatar/admin-link visibility.
+- Full flow tested end-to-end: dates → docs → home delivery → mock payment
+  → CONFIRMED/PAID → confirmation + email.
+- Overlap booking via the real form is rejected; concurrent creation is
+  guarded by `select_for_update` + re-check inside the payment transaction.
+- Flow pages require the booking owner's session; Django admin covers all
+  models with search/filters.
+
+### Auth model (Clerk + roles)
+
+- Navbar: anonymous visitors see Login; signed-in customers see their avatar
+  (Clerk photo or initial) linking to profile; the Admin link + `/dashboard/`
+  are visible and accessible to ADMIN role only — normal users get redirected.
+- Roles: `Customer.role` (`CUSTOMER`/`ADMIN`). When Supabase is configured,
+  the `user_roles` table is the source of truth (see `supabase_roles.sql` —
+  run it once in the Supabase SQL editor; RLS on, service key only).
+  Otherwise the local `Customer.role` applies.
+- Login verifies the Clerk user ID against Clerk's API, stores the role in
+  the session, and admins land on `/dashboard/`. Logout clears Django's
+  session and signs out of Clerk in the browser.
+- Make an admin: user signs in once, then
+  `python manage.py promote_admin <clerk-user-id-or-email>`.
+- Demo mode: admins can toggle simulated payments from the dashboard
+  ("Demo Mode" panel, stored in the `settings` table). ON = Pay button
+  completes bookings without Razorpay; OFF = real Razorpay flow.
+
+### Database: 7 tables, no framework clutter
+
+`locations`, `cars`, `customers`, `bookings`, `documents` — plus only
+`django_session` (Clerk logins live here) and `django_migrations` (required).
+Django's auth/admin apps were removed entirely because login, roles, and the
+dashboard are all Clerk-based; the old `auth_*` tables were dropped.
+
+---
+
+## 4. Deploying to Vercel
+
+Vercel detects this project as Django (a `manage.py` at the repo root) and
+serves it as a single serverless function with **zero-configuration support**.
+`vercel.json` only adds a build step that runs migrations and `collectstatic`
+(static files are then served from the Vercel CDN).
+
+### Environment variables to set in the Vercel project
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `SECRET_KEY` | Yes | Long random string |
+| `ALLOWED_HOSTS` | No | Defaults already include `.vercel.app`; add your custom domain, e.g. `drivego.com,.drivego.com` |
+| `DEBUG` | No | Set to `0` (defaults to `0` when `VERCEL=1`) |
+| `DATABASE_URL` | Yes | Supabase/Neon PostgreSQL URL. **SQLite does not persist on Vercel** — set this or deploys will use an empty sandbox DB |
+| `SUPABASE_URL` / `SUPABASE_KEY` | If using storage | Documents upload to Supabase Storage; without these, files are saved to Vercel's ephemeral disk and lost between instances |
+| `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | For sign-in | Without them the login/signup flow is disabled |
+| `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | For live payments | Without them the payment page runs in clearly-labelled mock mode |
+| `CSRF_TRUSTED_ORIGINS` | If custom domain | e.g. `https://drivego.com,https://www.drivego.com` |
+
+### Deploy steps
+
+1. Push the repo to GitHub and import it in Vercel (Python/fluid detection is automatic).
+2. Add the env vars above (set `DEBUG=0`). They are available during the build, which is what runs `migrate`.
+3. Deploy — the build runs `migrate` + `collectstatic`, then your site is live.
+
+Run locally with `python manage.py runserver` as before; the `SECURE_PROXY_SSL_HEADER`
+and `CSRF_TRUSTED_ORIGINS` settings only take effect when the proxy headers are present.
+

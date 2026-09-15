@@ -1,0 +1,28 @@
+{% extends "admin_base.html" %}
+{% block admin_title %}DriveGo - Admin Customers{% endblock %}
+{% block admin_content %}
+<div class="section">
+  <span class="eyebrow">CONTROL CENTER</span>
+  <h2>Customer Directory</h2>
+  <p class="small muted">Every registered customer with their trip history.</p>
+</div>
+
+<div class="panel">
+  <div style="overflow-x:auto">
+    <table>
+      <tr><th>Name</th><th>Email</th><th>Role</th><th>Completed trips</th><th>Total bookings</th></tr>
+      {% for row in customers %}
+      <tr>
+        <td>{{ row.customer.full_name|default:row.customer }}</td>
+        <td>{{ row.customer.email|default:"—" }}</td>
+        <td>{% if row.customer.role == 'ADMIN' %}<span class="badge info">Admin</span>{% else %}<span class="badge ok">Customer</span>{% endif %}</td>
+        <td>{{ row.trips }}</td>
+        <td>{{ row.bookings_total }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="muted">No customers yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

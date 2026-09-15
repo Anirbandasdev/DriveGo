@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block page %}home{% endblock %}
+{% block title %}DriveGo - Rent. Drive. Repeat.{% endblock %}
+{% block content %}
+<section class="hero-banner">
+  <div class="container hero-content">
+    <div class="hero-text">
+      <span class="hero-eyebrow"><span class="pulse"></span>Now serving 5 locations across Kolkata</span>
+      <h1>Find the <span class="grad">perfect car</span><br />for your journey.</h1>
+      <p>Convenient, reliable and affordable car rentals from multiple locations across the city.</p>
+      <div class="trust-pills">
+        <span><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Multiple Locations</span>
+        <span><svg class="ic" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Verified Cars</span>
+        <span><svg class="ic" viewBox="0 0 24 24"><path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 0 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/></svg>24/7 Support</span>
+      </div>
+      <div class="hero-stats">
+        <div><b>{{ fleet_count }}+</b><span>Cars in fleet</span></div>
+        <div><b>{{ location_count }}</b><span>City locations</span></div>
+        <div><b>{{ trips_count }}+</b><span>Trips completed</span></div>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <span class="vis-float"><span class="dot"></span>Ready to drive</span>
+      <div class="vis-card">
+        <img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=900&auto=format&fit=crop" alt="Signature sedan ready for pickup" loading="eager" />
+        <div class="vis-chip"><b>DriveGo Signature</b><span class="badge-pill">₹2,400<span>/day</span></span></div>
+      </div>
+      <span class="vis-float2"><span class="stars">★★★★★</span><span>4.9 trip rating</span></span>
+    </div>
+  </div>
+</section>
+
+<form class="search-card search-overlap" action="{% url 'cars' %}" method="get">
+  <div class="search-grid">
+    <div class="field"><label for="sLoc"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Pickup Location</label>
+      <select id="sLoc" name="location">
+        {% for loc in locations %}<option value="{{ loc.name }}">{{ loc.name }}</option>{% endfor %}
+      </select></div>
+    <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Pickup Date</label><input name="pickup_date" type="date" value="{{ default_pickup_date }}" /></div>
+    <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Pickup Time</label><input name="pickup_time" type="time" value="10:00" /></div>
+    <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Drop-off Date</label><input name="drop_date" type="date" value="{{ default_drop_date }}" /></div>
+    <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Drop-off Time</label><input name="drop_time" type="time" value="18:00" /></div>
+    <div><button class="btn btn-primary" type="submit">Search Cars <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button></div>
+  </div>
+</form>
+
+<section class="section">
+  <div class="section-head">
+    <div><span class="eyebrow">POPULAR FLEET</span><h2>Popular Cars</h2><p class="muted">Explore our most booked cars, loved by our customers.</p></div>
+    <a class="link-more" href="{% url 'cars' %}">View All Cars <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+  </div>
+  <div class="car-grid-4">{% for item in popular_cars %}{% include "partials/car_card.html" with car=item.car status=item.status %}{% endfor %}</div>
+</section>
+
+<section class="section sec-center">
+  <span class="eyebrow">WHY DRIVEGO</span><h2>Why Choose DriveGo?</h2>
+  <p class="muted">We're more than just a car rental service. We're your travel partner.</p>
+  <div class="why-grid">
+    <div class="why-card t-blue"><div class="why-ico"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></div><b>Multiple Locations</b><p>Pick up and drop off from various locations across the city.</p></div>
+    <div class="why-card t-green"><div class="why-ico"><svg class="ic" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></div><b>Verified Cars</b><p>Well-maintained, clean and quality-assured vehicles.</p></div>
+    <div class="why-card t-orange"><div class="why-ico"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><b>Flexible Booking</b><p>Choose from hourly, daily or long-term rentals.</p></div>
+    <div class="why-card t-purple"><div class="why-ico"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></div><b>Secure Payments</b><p>Multiple payment options with bank-level security.</p></div>
+  </div>
+</section>
+
+<section class="section" id="how">
+  <span class="eyebrow">HOW IT WORKS</span><h2>How It Works</h2>
+  <p class="muted">Get on the road in just a few simple steps.</p>
+  <div class="how-grid">
+    <div class="how-step"><div class="how-ico"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><span class="how-num">01</span><b>Choose Location</b><p>Select your preferred pickup location.</p></div>
+    <div class="how-step"><div class="how-ico"><svg class="ic" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg></div><span class="how-num">02</span><b>Select Car</b><p>Browse and choose your ideal car.</p></div>
+    <div class="how-step"><div class="how-ico"><svg class="ic" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8M16 13H8M16 17H8"/></svg></div><span class="how-num">03</span><b>Verify Documents</b><p>Submit required documents.</p></div>
+    <div class="how-step"><div class="how-ico"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></div><span class="how-num">04</span><b>Pay &amp; Drive</b><p>Complete payment and hit the road!</p></div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-head">
+    <div><span class="eyebrow">OUR NETWORK</span><h2>Our Locations</h2><p class="muted">Find a DriveGo store near you.</p></div>
+    <a class="link-more" href="{% url 'cars' %}">View All Locations <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+  </div>
+  <div class="loc-cards">
+    {% for loc in locations %}
+    <a class="loc-card" href="{% url 'cars' %}?location={{ loc.name|urlencode }}">
+      <img src="{{ loc.image_url }}" alt="{{ loc.name }}" loading="lazy"/>
+      <span class="loc-badge">{{ loc.name|slice:":1" }}</span>
+      <div class="loc-info"><b>{{ loc.name }}</b><span class="muted small"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> {{ loc.cars.count }}+ Cars Available</span></div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="cta-banner">
+  <div class="cta-inner">
+    <span class="cta-kicker">READY FOR YOUR NEXT JOURNEY?</span>
+    <h2>Ready for your next journey?</h2>
+    <p>Choose your car. Pick your location. Hit the road.</p>
+    <a class="btn-white" href="{% url 'cars' %}">Book a Car <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+  </div>
+</section>
+{% endblock %}

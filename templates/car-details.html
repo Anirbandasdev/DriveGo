@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block page %}details{% endblock %}
+{% block title %}DriveGo - {{ car.brand }} {{ car.model }}{% endblock %}
+{% block content %}
+<section class="section page-head">
+  <div class="detail-bar">
+    <a href="{% url 'cars' %}" class="small"><svg class="ic" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>Back to results</a>
+    <span class="eyebrow">CAR DETAILS</span>
+  </div>
+  <h2>{{ car.brand }} {{ car.model }}</h2>
+  <p class="muted">{{ car.location.name }} · {{ car.seats }} Seats · {{ car.transmission }} · {{ car.fuel_type }}</p>
+</section>
+
+<div class="detail-layout">
+  <div>
+    <img class="main" src="{{ car.display_image }}" alt="{{ car.brand }} {{ car.model }}" />
+    <div class="panel info-panel">
+      <h3>Features</h3>
+      <div class="specs">{% for feat in car.feature_list %}<span>{{ feat }}</span>{% endfor %}</div>
+      <h3 style="margin-top:12px">Rental policy</h3>
+      <p class="small muted">Valid driving license required · Fuel on return basis · 200 km/day included.</p>
+      <h3 style="margin-top:12px">Cancellation</h3>
+      <p class="small muted">Free cancellation up to 24 hrs before pickup.</p>
+      <h3 style="margin-top:12px">Location</h3>
+      <p class="small muted"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> {{ car.location.address }}, {{ car.location.city }}</p>
+    </div>
+  </div>
+
+  <aside class="panel book-widget">
+    <div class="price"><b style="font-size:1.5rem">₹{{ car.price_per_day }}</b><span class="muted">/day</span></div>
+    <div class="book-status">{% if available %}<span class="badge ok">Available</span>{% else %}<span class="badge no">Booked</span>{% endif %}</div>
+    <form action="{% url 'booking_dates' car.id %}" method="get">
+      <div class="field"><label>Pickup location</label><div class="pickup-fixed"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> {{ car.location.name }}</div></div>
+      <div class="form-row">
+        <div class="field"><label>Pickup date</label><input name="pickup_date" type="date" value="{{ request.GET.pickup_date|default:default_pickup_date }}" /></div>
+        <div class="field"><label>Time</label><input name="pickup_time" type="time" value="{{ request.GET.pickup_time|default:'10:00' }}" /></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Drop date</label><input name="drop_date" type="date" value="{{ request.GET.drop_date|default:default_drop_date }}" /></div>
+        <div class="field"><label>Time</label><input name="drop_time" type="time" value="{{ request.GET.drop_time|default:'18:00' }}" /></div>
+      </div>
+      <div class="book-avail">{% if not dated %}<span class="badge info">Select dates to check live availability</span>{% elif available %}<span class="badge ok">✓ Available for your selected dates</span>{% elif booked_slot %}<span class="badge no">Booked {{ booked_slot.from|date:"d M, h:i A" }} – {{ booked_slot.to|date:"d M, h:i A" }}{% if next_free %} · Free from {{ next_free|date:"d M, h:i A" }}{% endif %}</span>{% else %}<span class="badge no">Currently unavailable</span>{% endif %}</div>
+      <button class="btn btn-primary btn-block" type="submit"{% if not available %} disabled{% endif %}>Continue Booking</button>
+      <a class="btn btn-ghost btn-block btn-alt" href="{% url 'cars' %}">See alternatives</a>
+    </form>
+    <ul class="trust-mini">
+      <li><svg class="ic" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Verified car · fully insured</li>
+      <li><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Free cancellation up to 24 hrs before pickup</li>
+      <li><svg class="ic" viewBox="0 0 24 24"><path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 0 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/></svg>24/7 roadside assistance included</li>
+    </ul>
+  </aside>
+</div>
+{% endblock %}

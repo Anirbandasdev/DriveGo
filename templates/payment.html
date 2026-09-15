@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block page %}payment{% endblock %}
+{% block title %}DriveGo - Payment{% endblock %}
+{% block content %}
+<div class="section flow">
+  <div class="progress">
+    <span class="p-step done"><span class="p-dot">✓</span>1. Car</span><span class="p-arrow">→</span>
+    <span class="p-step done"><span class="p-dot">✓</span>2. Dates</span><span class="p-arrow">→</span>
+    <span class="p-step done"><span class="p-dot">✓</span>3. Verification</span><span class="p-arrow">→</span>
+    <span class="p-step done"><span class="p-dot">✓</span>4. Delivery</span><span class="p-arrow">→</span>
+    <span class="p-step now"><span class="p-dot">5</span>5. Payment</span>
+  </div>
+
+  <h2>Payment{% if is_mock %} (demo - no real charge){% endif %}</h2>
+  <p class="muted">{% if is_mock %}Razorpay keys are not configured, so this demo simulates a successful payment. Add keys in .env for the real flow.{% else %}Complete your payment securely with Razorpay.{% endif %}</p>
+
+  <div class="panel" style="margin-top:12px">
+    <div class="pay-total"><span>Total payable</span><b>₹{{ booking.total_amount }}</b></div>
+    <div class="pay-opt sel" data-pay="upi"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg><div><b>UPI</b><div class="small muted">GPay / PhonePe / Paytm</div></div></div>
+    <div class="pay-opt" data-pay="card"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg><div><b>Credit / Debit Card</b><div class="small muted">Visa · Mastercard · RuPay</div></div></div>
+    <div class="pay-opt" data-pay="net"><svg class="ic" viewBox="0 0 24 24"><line x1="3" x2="21" y1="22" y2="22"/><path d="M6 18v-7M10 18v-7M14 18v-7M18 18v-7"/><path d="m12 2 9 5H3z"/></svg><div><b>Net Banking</b><div class="small muted">All major banks</div></div></div>
+    <button class="btn btn-primary btn-block" style="margin-top:14px" id="payBtn">Pay ₹{{ booking.total_amount }}</button>
+    <p class="small muted" style="margin-top:8px;text-align:center" id="payMsg"></p>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if not is_mock %}<script src="https://checkout.razorpay.com/v1/checkout.js"></script>{% endif %}
+<script>
+function getCookie(name) {
+  var value = '; ' + document.cookie;
+  var parts = value.split('; ' + name + '=');
+  if (parts.length === 2) return parts.pop().split(';').shift();
+}
+(function () {
+  var btn = document.getElementById('payBtn');
+  var msg = document.getElementById('payMsg');
+  var method = 'upi';
+  document.querySelectorAll('[data-pay]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      document.querySelectorAll('[data-pay]').forEach(function (x) { x.classList.remove('sel'); });
+      el.classList.add('sel');
+      method = el.getAttribute('data-pay');
+    });
+  });
+  function postVerify(data, onFail) {
+    fetch("{% url 'payment_verify' %}", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify(data)
+    }).then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); }).then(function (res) {
+      if (res.body.ok) { window.location.href = res.body.redirect; }
+      else { msg.textContent = res.body.error || 'Payment failed.'; if (onFail) onFail(); }
+    }).catch(function () { msg.textContent = 'Network error. Please try again.'; });
+  }
+  btn.addEventListener('click', function () {
+    msg.textContent = 'Processing payment...';
+    {% if is_mock %}
+    postVerify({
+      booking_id: "{{ booking.booking_id }}",
+      razorpay_order_id: "{{ booking.razorpay_order_id }}",
+      razorpay_payment_id: "pay_mock_{{ booking.booking_id }}",
+      razorpay_signature: "mock",
+      method: method
+    });
+    {% else %}
+    var options = {
+      key: "{{ razorpay_key_id }}",
+      amount: {% widthratio booking.total_amount 1 100 %},
+      currency: "INR",
+      name: "DriveGo",
+      description: "Booking {{ booking.booking_id }}",
+      order_id: "{{ booking.razorpay_order_id }}",
+      handler: function (resp) {
+        postVerify({
+          booking_id: "{{ booking.booking_id }}",
+          razorpay_order_id: resp.razorpay_order_id,
+          razorpay_payment_id: resp.razorpay_payment_id,
+          razorpay_signature: resp.razorpay_signature,
+          method: method
+        });
+      },
+      modal: { ondismiss: function () { msg.textContent = 'Payment cancelled.'; } }
+    };
+    new Razorpay(options).open();
+    {% endif %}
+  });
+})();
+</script>
+{% endblock %}

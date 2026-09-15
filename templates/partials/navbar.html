@@ -1,0 +1,23 @@
+<header class="nav">
+  <div class="container nav-inner">
+    <a href="{% url 'home' %}" class="logo-wrap"><span class="logo">DriveGo<span class="logo-dot">.</span></span><span class="nav-tag">Rent. Drive. Repeat.</span></a>
+    {% with active=request.resolver_match.url_name %}
+    <nav class="nav-links" id="navLinks">
+      <a href="{% url 'home' %}"{% if active == 'home' %} class="active"{% endif %}>Home</a>
+      <a href="{% url 'cars' %}"{% if active in 'cars,car_detail,booking_dates,verification,delivery,summary,payment,confirmation' %} class="active"{% endif %}>Cars</a>
+      <a href="{% url 'my_bookings' %}"{% if active == 'my_bookings' %} class="active"{% endif %}>My Bookings</a>
+      {% if current_customer and current_customer.is_admin %}<a href="{% url 'admin_dashboard' %}"{% if active == 'admin_dashboard' %} class="active"{% endif %}>Admin</a>{% endif %}
+    </nav>
+    {% endwith %}
+    <div class="nav-actions">
+      <a href="{% url 'cars' %}" class="nav-search" aria-label="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></a>
+      {% if current_customer %}
+      <a href="{% url 'profile' %}" class="avatar" aria-label="Profile" title="{{ current_customer }}">{% if current_customer.profile_image_url %}<img src="{{ current_customer.profile_image_url }}" alt="Profile" />{% else %}{{ current_customer.full_name|default:current_customer.email|default:"D"|slice:":1"|upper }}{% endif %}</a>
+      {% else %}
+      <a href="{% url 'login' %}" class="btn btn-ghost">Login</a>
+      {% endif %}
+      <a href="{% url 'cars' %}" class="btn btn-primary">Book a Car</a>
+      <button class="nav-toggle" id="navToggle" aria-label="Menu"><svg class="ic" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
+    </div>
+  </div>
+</header>

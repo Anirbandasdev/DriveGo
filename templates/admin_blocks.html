@@ -1,0 +1,31 @@
+{% extends "admin_base.html" %}
+{% block admin_title %}DriveGo - Admin Block Dates{% endblock %}
+{% block admin_content %}
+<div class="section">
+  <span class="eyebrow">CONTROL CENTER</span>
+  <h2>Block Dates</h2>
+  <p class="small muted">Temporarily take a car off the calendar (maintenance, owner use). Bookings can't be made during blocked periods.</p>
+</div>
+
+<div class="panel">
+  <h3>Add Block</h3>
+  <form action="{% url 'admin_block_dates' %}" method="post" class="admin-form">{% csrf_token %}
+    <label class="field"><span>Car</span>
+      <select name="car_id" required>{% for car in all_cars %}<option value="{{ car.pk }}">{{ car }}</option>{% endfor %}</select>
+    </label>
+    <label class="field"><span>From</span><input type="datetime-local" name="start_datetime" required /></label>
+    <label class="field"><span>Until</span><input type="datetime-local" name="end_datetime" required /></label>
+    <label class="field"><span>Note</span><input type="text" name="note" /></label>
+    <button class="btn btn-primary" type="submit">Block</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h3>Recent Blocks</h3>
+  {% for blk in recent_blocks %}
+  <div class="kv"><span>{{ blk.car }}</span><span class="small muted">{{ blk.start_datetime|date:"d M, H:i" }} → {{ blk.end_datetime|date:"d M, H:i" }}{% if blk.note %} · {{ blk.note }}{% endif %}</span></div>
+  {% empty %}
+  <p class="small muted">No blocked dates yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

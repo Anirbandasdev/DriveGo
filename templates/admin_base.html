@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block page %}admin{% endblock %}
+{% block title %}{% block admin_title %}DriveGo - Admin{% endblock %}{% endblock %}
+{% block content %}
+<div class="admin-layout">
+  <aside class="sidebar">
+    <p class="small muted" style="text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin:0 0 10px 6px">DriveGo Admin</p>
+    <a href="{% url 'admin_dashboard' %}" class="{% if active == 'overview' %}on{% endif %}">Overview</a>
+    <a href="{% url 'admin_verifications' %}" class="{% if active == 'verifications' %}on{% endif %}">Verifications{% if verification_count %} <span class="badge warn">{{ verification_count }}</span>{% endif %}</a>
+    <a href="{% url 'admin_bookings' %}" class="{% if active == 'bookings' %}on{% endif %}">Bookings</a>
+    <a href="{% url 'admin_customers' %}" class="{% if active == 'customers' %}on{% endif %}">Customers</a>
+    <hr />
+    <a href="{% url 'admin_cars' %}" class="{% if active == 'cars' %}on{% endif %}">Cars</a>
+    <a href="{% url 'admin_locations' %}" class="{% if active == 'locations' %}on{% endif %}">Locations</a>
+    <a href="{% url 'admin_blocks' %}" class="{% if active == 'blocks' %}on{% endif %}">Block Dates</a>
+  </aside>
+
+  <div class="admin-content">
+    {% block admin_content %}{% endblock %}
+  </div>
+</div>
+{% endblock %}

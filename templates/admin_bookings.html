@@ -1,0 +1,46 @@
+{% extends "admin_base.html" %}
+{% block admin_title %}DriveGo - Admin Bookings{% endblock %}
+{% block admin_content %}
+<div class="section">
+  <span class="eyebrow">CONTROL CENTER</span>
+  <h2>Bookings</h2>
+  <p class="small muted">All bookings across all locations, newest first. Use the action buttons to manage the trip lifecycle.</p>
+</div>
+
+<div class="panel">
+  <div style="overflow-x:auto">
+    <table>
+      <tr><th>Booking</th><th>Car</th><th>Customer</th><th>Period</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+      {% for b in bookings_list %}
+      <tr>
+        <td>{{ b.booking_id }}</td>
+        <td>{{ b.car }}<br /><span class="small muted">{{ b.pickup_location.name }}</span></td>
+        <td>{{ b.user }}</td>
+        <td>{{ b.pickup_datetime|date:"d M, h:i A" }}<br /><span class="small muted">→ {{ b.dropoff_datetime|date:"d M, h:i A" }}</span></td>
+        <td>₹{{ b.total_amount }}<br /><span class="small muted">{{ b.payment_status }}</span></td>
+        <td><span class="badge {% if b.status == 'CONFIRMED' or b.status == 'ACTIVE' %}ok{% elif b.status == 'COMPLETED' %}info{% elif b.status == 'PENDING_VERIFICATION' %}warn{% else %}no{% endif %}">{{ b.get_status_display }}</span></td>
+        <td>
+          <div class="panel-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+            {% if b.status == 'CONFIRMED' %}
+            <form action="{% url 'admin_trip_action' b.booking_id 'start' %}" method="post">{% csrf_token %}<button class="btn btn-sm" type="submit">Start trip</button></form>
+            {% endif %}
+            {% if b.status == 'CONFIRMED' or b.status == 'ACTIVE' %}
+            <form action="{% url 'admin_trip_action' b.booking_id 'complete' %}" method="post">{% csrf_token %}<button class="btn btn-sm" type="submit">Complete</button></form>
+            {% endif %}
+            {% if b.status != 'COMPLETED' and b.status != 'CANCELLED' and b.status != 'REJECTED' %}
+            <form action="{% url 'admin_cancel_booking' b.booking_id %}" method="post">{% csrf_token %}<button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('Cancel this booking? Paid amount is marked refunded.')">Cancel</button></form>
+            {% endif %}
+            <form action="{% url 'admin_set_note' b.booking_id %}" method="post" style="display:flex;gap:6px;align-items:center">{% csrf_token %}
+              <input type="text" name="note" placeholder="note…" value="{{ b.admin_note }}" class="note-input" />
+              <button class="btn btn-sm btn-ghost" type="submit">Note</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="muted">No bookings yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}
