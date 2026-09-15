@@ -1804,6 +1804,10 @@ tbody tr:hover {
     font-size: 15px
   }
 
+  body.nav-open {
+    overflow: hidden
+  }
+
   .section {
     padding: 32px 0
   }
