@@ -60,7 +60,7 @@ WSGI_APPLICATION = "drivego.wsgi.application"
 
 _database_url = os.environ.get("DATABASE_URL", "")
 if _database_url and dj_database_url:
-    DATABASES = {"default": dj_database_url.parse(_database_url, conn_max_age=600)}
+    DATABASES = {"default": dj_database_url.parse(_database_url, conn_max_age=0)}
 else:
     DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 

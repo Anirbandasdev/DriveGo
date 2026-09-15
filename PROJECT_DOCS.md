@@ -206,8 +206,9 @@ dashboard are all Clerk-based; the old `auth_*` tables were dropped.
 
 Vercel detects this project as Django (a `manage.py` at the repo root) and
 serves it as a single serverless function with **zero-configuration support**.
-`vercel.json` only adds a build step that runs migrations and `collectstatic`
-(static files are then served from the Vercel CDN).
+`vercel.json` only adds a `collectstatic` step; static files are then served
+from the Vercel CDN. Migrations are **not** run during the build (Vercel build
+machines can't reach most databases) — run them once yourself, see below.
 
 ### Environment variables to set in the Vercel project
 
@@ -216,17 +217,31 @@ serves it as a single serverless function with **zero-configuration support**.
 | `SECRET_KEY` | Yes | Long random string |
 | `ALLOWED_HOSTS` | No | Defaults already include `.vercel.app`; add your custom domain, e.g. `drivego.com,.drivego.com` |
 | `DEBUG` | No | Set to `0` (defaults to `0` when `VERCEL=1`) |
-| `DATABASE_URL` | Yes | Supabase/Neon PostgreSQL URL. **SQLite does not persist on Vercel** — set this or deploys will use an empty sandbox DB |
+| `DATABASE_URL` | Yes | Supabase/Neon PostgreSQL URL. **SQLite does not persist on Vercel** — set this or deploys will run against an empty sandbox DB |
 | `SUPABASE_URL` / `SUPABASE_KEY` | If using storage | Documents upload to Supabase Storage; without these, files are saved to Vercel's ephemeral disk and lost between instances |
 | `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | For sign-in | Without them the login/signup flow is disabled |
 | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | For live payments | Without them the payment page runs in clearly-labelled mock mode |
 | `CSRF_TRUSTED_ORIGINS` | If custom domain | e.g. `https://drivego.com,https://www.drivego.com` |
 
+> Supabase `DATABASE_URL`: use the **pooler** connection string, not the IPv6
+> "direct" one. In the Supabase dashboard go to **Settings → Database →
+> Connection strings** and copy the **Transaction pooler** URL
+> (`postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`).
+> The direct `db.<ref>.supabase.co` host is IPv6-only and unreachable from
+> Vercel (both during builds and at runtime).
+
 ### Deploy steps
 
 1. Push the repo to GitHub and import it in Vercel (Python/fluid detection is automatic).
-2. Add the env vars above (set `DEBUG=0`). They are available during the build, which is what runs `migrate`.
-3. Deploy — the build runs `migrate` + `collectstatic`, then your site is live.
+2. Add the env vars above (set `DEBUG=0`).
+3. **Create the database tables once** (migrations don't run during the build):
+   ```bash
+   # locally, with the same DATABASE_URL (pooler) in your .env:
+   python manage.py migrate
+   # and the roles/permissions in Supabase:
+   #   run supabase_roles.sql once in the Supabase SQL editor
+   ```
+4. Deploy — the build runs `collectstatic`, then your site is live at `drivego-*.vercel.app`.
 
 Run locally with `python manage.py runserver` as before; the `SECURE_PROXY_SSL_HEADER`
 and `CSRF_TRUSTED_ORIGINS` settings only take effect when the proxy headers are present.
