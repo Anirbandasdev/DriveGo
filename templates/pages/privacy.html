@@ -1,0 +1,38 @@
+{% extends "pages/page_base.html" %}
+{% block page %}privacy{% endblock %}
+{% block title %}DriveGo - Privacy Policy{% endblock %}
+{% block heading %}Privacy Policy{% endblock %}
+{% block body %}
+<p class="pg-meta">Last updated: 17 September 2026</p>
+<p>This policy explains what information DriveGo collects and how we use it.</p>
+
+<h2>What we collect</h2>
+<ul>
+  <li><b>Account details:</b> your name, email address and profile photo from your sign-in (handled by Clerk).</li>
+  <li><b>Booking details:</b> the car, dates, pickup or delivery address and any instructions you add.</li>
+  <li><b>Documents:</b> the driving license and government ID you upload.</li>
+  <li><b>Payment details:</b> payment status and reference numbers. Card and bank details are handled by Razorpay and never reach us.</li>
+</ul>
+
+<h2>How we use it</h2>
+<ul>
+  <li>To create and manage your bookings.</li>
+  <li>To check your identity and driving license before handing over a car.</li>
+  <li>To process payments and refunds.</li>
+  <li>To contact you about your booking.</li>
+</ul>
+<p>We do not sell your information or use it for advertising.</p>
+
+<h2>Who can see it</h2>
+<ul>
+  <li>Your documents are visible only to our verification staff.</li>
+  <li>We share information with the services we need to run bookings: Clerk (sign-in), Razorpay (payments) and Supabase (secure storage).</li>
+  <li>We may share information if required by law.</li>
+</ul>
+
+<h2>Your choices</h2>
+<p>You can ask us to show, correct or delete your information. Some booking and payment records may need to be kept for legal and accounting purposes.</p>
+
+<h2>Contact</h2>
+<p>For privacy questions, email <a href="mailto:support@drivego.com">support@drivego.com</a> or see our <a href="{% url 'contact' %}">contact page</a>.</p>
+{% endblock %}

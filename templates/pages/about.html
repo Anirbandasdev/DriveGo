@@ -1,0 +1,26 @@
+{% extends "pages/page_base.html" %}
+{% block page %}about{% endblock %}
+{% block title %}DriveGo - About{% endblock %}
+{% block heading %}About DriveGo{% endblock %}
+{% block body %}
+<p>DriveGo is a self-drive car rental service in Kolkata. You choose a car, pick your dates, upload your documents and pay online. Then you collect the car from one of our locations or have it delivered to your door.</p>
+
+<h2>What we offer</h2>
+<ul>
+  <li>{{ fleet_count }} cars, from small hatchbacks to 7-seater SUVs and luxury sedans.</li>
+  <li>{{ location_count }} pickup location{{ location_count|pluralize }} across the city.</li>
+  <li>Live availability, so you only see cars that are free for your dates.</li>
+  <li>The full price, including taxes, before you pay.</li>
+  <li>Free cancellation any time before pickup.</li>
+</ul>
+
+<h2>How booking works</h2>
+<ol>
+  <li>Search for a car and choose your pickup and return dates.</li>
+  <li>Upload your driving license and a government ID.</li>
+  <li>Choose store pickup or home delivery.</li>
+  <li>Pay securely. We confirm the booking once your documents are checked.</li>
+</ol>
+
+<p>Have a question? See the <a href="{% url 'help' %}">Help Center</a> or <a href="{% url 'contact' %}">contact us</a>.</p>
+{% endblock %}

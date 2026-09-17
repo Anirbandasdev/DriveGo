@@ -1574,3 +1574,15 @@ class AdminRoleManagementTests(TestCase):
             _login("user_role_admin").post(f"/dashboard/customers/{self.member.pk}/role/", {"role": "ADMIN"})
         self.assertEqual(post.call_args.kwargs["json"], {"clerk_user_id": "user_role_member", "role": "ADMIN"})
         self.assertIn("merge-duplicates", post.call_args.kwargs["headers"]["Prefer"])
+
+
+class InfoPagesTests(TestCase):
+    def test_simple_pages_render_and_footer_links_to_them(self):
+        Location.objects.create(name="Info Branch", address="1 Park Street", city="Kolkata", phone="033 1234")
+        for url, text in (("/about/", "About DriveGo"), ("/contact/", "Info Branch"), ("/help/", "Help Center"),
+                          ("/terms/", "Terms &amp; Conditions"), ("/privacy/", "Privacy Policy")):
+            with self.subTest(url=url):
+                self.assertContains(Client().get(url), text)
+        footer = Client().get("/").content.decode().split('class="site-footer"')[1]
+        for url in ("/about/", "/contact/", "/help/", "/terms/", "/privacy/"):
+            self.assertIn(f'href="{url}"', footer)

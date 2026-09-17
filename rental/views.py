@@ -387,6 +387,29 @@ def car_detail(request, car_id):
     })
 
 
+def about(request):
+    return render(request, "pages/about.html", {
+        "fleet_count": Car.objects.filter(status="AVAILABLE").count(),
+        "location_count": Location.objects.filter(is_active=True).count(),
+    })
+
+
+def contact(request):
+    return render(request, "pages/contact.html", {"locations": Location.objects.filter(is_active=True).order_by("name")})
+
+
+def help_center(request):
+    return render(request, "pages/help.html", {"hold_minutes": getattr(settings, "BOOKING_HOLD_MINUTES", 60)})
+
+
+def terms(request):
+    return render(request, "pages/terms.html")
+
+
+def privacy(request):
+    return render(request, "pages/privacy.html")
+
+
 # ---------------------------------------------------------------------------
 # Checkout flow
 # ---------------------------------------------------------------------------

@@ -1,0 +1,35 @@
+{% extends "pages/page_base.html" %}
+{% block page %}contact{% endblock %}
+{% block title %}DriveGo - Contact Us{% endblock %}
+{% block heading %}Contact us{% endblock %}
+{% block body %}
+<p>We're happy to help with bookings, payments, documents or anything else.</p>
+
+<h2>Customer support</h2>
+<ul>
+  <li>Phone: <a href="tel:+919876543210">+91 98765 43210</a></li>
+  <li>Email: <a href="mailto:support@drivego.com">support@drivego.com</a></li>
+  <li>Hours: every day, 9 AM to 9 PM</li>
+</ul>
+<p>If you have a booking, please mention your booking ID (for example DG-20260917-0001).</p>
+
+<h2>Our locations</h2>
+{% if locations %}
+<table class="pg-table">
+  <thead><tr><th>Location</th><th>Address</th><th>Phone</th></tr></thead>
+  <tbody>
+    {% for loc in locations %}
+    <tr>
+      <td><a href="{% url 'cars' %}?location={{ loc.name|urlencode }}">{{ loc.name }}</a></td>
+      <td>{{ loc.address|default:"-" }}{% if loc.city %}, {{ loc.city }}{% endif %}</td>
+      <td>{% if loc.phone %}<a href="tel:{{ loc.phone }}">{{ loc.phone }}</a>{% else %}-{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>Location details will be listed here soon.</p>
+{% endif %}
+
+<p>For roadside help during a trip, call the support number above at any time.</p>
+{% endblock %}

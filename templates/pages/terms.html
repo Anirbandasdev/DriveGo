@@ -1,0 +1,47 @@
+{% extends "pages/page_base.html" %}
+{% block page %}terms{% endblock %}
+{% block title %}DriveGo - Terms &amp; Conditions{% endblock %}
+{% block heading %}Terms &amp; Conditions{% endblock %}
+{% block body %}
+<p class="pg-meta">Last updated: 17 September 2026</p>
+<p>These terms apply when you book a car with DriveGo. By booking, you agree to them.</p>
+
+<h2>1. Who can rent</h2>
+<ul>
+  <li>You must hold a valid driving license and a government ID.</li>
+  <li>The person who books must be the person who drives the car.</li>
+</ul>
+
+<h2>2. Bookings</h2>
+<ul>
+  <li>A booking is confirmed only after payment and approval of your documents.</li>
+  <li>We may cancel a booking if documents are invalid or cannot be verified. Any payment is then refunded in full.</li>
+</ul>
+
+<h2>3. Prices and payment</h2>
+<ul>
+  <li>Rent is charged per day. The total includes applicable taxes and any delivery charge.</li>
+  <li>Payments are processed by Razorpay. We do not store your card details.</li>
+</ul>
+
+<h2>4. Cancellation and refunds</h2>
+<ul>
+  <li>You can cancel free of charge any time before the pickup time.</li>
+  <li>Once a trip has started it cannot be cancelled online. Please contact us.</li>
+  <li>Refunds go back to the original payment method.</li>
+</ul>
+
+<h2>5. Using the car</h2>
+<ul>
+  <li>Return the car on time, at the booked location, with the same fuel level.</li>
+  <li>Each rental includes 200 km per day.</li>
+  <li>Follow traffic laws. Fines and challans during your trip are your responsibility.</li>
+  <li>Do not smoke in the car or use it for racing, towing or commercial purposes.</li>
+</ul>
+
+<h2>6. Damage and accidents</h2>
+<p>Report any accident, damage or breakdown to us straight away. You may be charged for damage caused by misuse or negligence.</p>
+
+<h2>7. Contact</h2>
+<p>Questions about these terms? <a href="{% url 'contact' %}">Contact us</a>.</p>
+{% endblock %}

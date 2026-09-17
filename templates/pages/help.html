@@ -1,0 +1,51 @@
+{% extends "pages/page_base.html" %}
+{% block page %}help{% endblock %}
+{% block title %}DriveGo - Help Center{% endblock %}
+{% block heading %}Help Center{% endblock %}
+{% block body %}
+<p>Answers to common questions. If you can't find what you need, <a href="{% url 'contact' %}">contact us</a>.</p>
+
+<h2>Booking</h2>
+<details>
+  <summary>Why does a car show as "Booked"?</summary>
+  <p>It is already booked for part of the dates you picked. Other dates may be free: open the car and check its availability calendar, or use the suggested next free dates.</p>
+</details>
+<details>
+  <summary>How long is a car held while I book?</summary>
+  <p>We hold the car for {{ hold_minutes }} minutes while you finish checkout. If you don't pay in that time, the car becomes available to others again.</p>
+</details>
+<details>
+  <summary>Can I change my dates?</summary>
+  <p>Before paying, go back to the dates step and pick new dates; your documents are kept. After paying, cancel the booking and book again, or contact us.</p>
+</details>
+
+<h2>Documents</h2>
+<details>
+  <summary>Which documents do I need?</summary>
+  <p>A valid driving license and a government ID (Aadhaar, PAN or passport). Upload clear JPG, PNG or PDF files, up to 5 MB each.</p>
+</details>
+<details>
+  <summary>What if a document is rejected?</summary>
+  <p>You'll see the reason on your booking page. Upload a clearer copy and we'll review it again.</p>
+</details>
+
+<h2>Payment and cancellation</h2>
+<details>
+  <summary>How do I pay?</summary>
+  <p>Online by UPI, card or net banking through Razorpay. The total shown includes {{ TAX_PERCENT }}% tax.</p>
+</details>
+<details>
+  <summary>How do I cancel, and will I get a refund?</summary>
+  <p>Open My Bookings and choose Cancel. Cancellation is free any time before pickup, and the full amount is refunded to your original payment method.</p>
+</details>
+
+<h2>Pickup and delivery</h2>
+<details>
+  <summary>How much is home delivery?</summary>
+  <p>Home delivery costs ₹{{ DELIVERY_CHARGE }}. The car is returned to its pickup location.</p>
+</details>
+<details>
+  <summary>What should I bring at pickup?</summary>
+  <p>Your original driving license. Please return the car with the same fuel level it had at pickup.</p>
+</details>
+{% endblock %}

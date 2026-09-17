@@ -411,8 +411,151 @@ function bindAdminNav() {
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") shell.classList.remove("nav-open"); });
 }
 
+/* Styled option list for <select> on desktop. The real select stays in place and
+   keeps its value, events and validation; only the OS popup is replaced. Touch
+   devices keep the native picker, which suits them better. */
+function initDropdowns() {
+  if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  var menu = null;
+  var current = null;
+  var active = -1;
+  var typed = "";
+  var typedAt = 0;
+
+  function options() {
+    return Array.prototype.slice.call(current.options);
+  }
+
+  function paint() {
+    Array.prototype.forEach.call(menu.children, function (el, i) {
+      el.classList.toggle("is-active", i === active);
+      el.setAttribute("aria-selected", i === current.selectedIndex ? "true" : "false");
+    });
+    var el = menu.children[active];
+    if (el) {
+      /* Scroll only the list: scrollIntoView could scroll the page, which closes the menu. */
+      if (el.offsetTop < menu.scrollTop) menu.scrollTop = el.offsetTop;
+      else if (el.offsetTop + el.offsetHeight > menu.scrollTop + menu.clientHeight) {
+        menu.scrollTop = el.offsetTop + el.offsetHeight - menu.clientHeight;
+      }
+      current.setAttribute("aria-activedescendant", el.id);
+    }
+  }
+
+  function position() {
+    var r = current.getBoundingClientRect();
+    menu.style.minWidth = r.width + "px";
+    menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + "px";
+    var below = window.innerHeight - r.bottom;
+    if (below < menu.offsetHeight + 12 && r.top > below) {
+      menu.style.top = Math.max(8, r.top - menu.offsetHeight - 6) + "px";
+    } else {
+      menu.style.top = r.bottom + 6 + "px";
+    }
+  }
+
+  function open(select) {
+    if (current === select) return;
+    close();
+    current = select;
+    menu = document.createElement("div");
+    menu.className = "dd-menu";
+    menu.setAttribute("role", "listbox");
+    options().forEach(function (opt, i) {
+      var item = document.createElement("div");
+      item.className = "dd-option" + (opt.disabled ? " is-disabled" : "");
+      item.id = "dd-opt-" + i;
+      item.setAttribute("role", "option");
+      item.textContent = opt.textContent;
+      item.addEventListener("mousedown", function (e) { e.preventDefault(); });
+      item.addEventListener("click", function () { if (!opt.disabled) choose(i); });
+      item.addEventListener("mousemove", function () { if (active !== i) { active = i; paint(); } });
+      menu.appendChild(item);
+    });
+    document.body.appendChild(menu);
+    active = Math.max(select.selectedIndex, 0);
+    select.setAttribute("aria-expanded", "true");
+    select.classList.add("dd-open");
+    position();
+    paint();
+  }
+
+  function close() {
+    if (!menu) return;
+    menu.remove();
+    current.removeAttribute("aria-expanded");
+    current.removeAttribute("aria-activedescendant");
+    current.classList.remove("dd-open");
+    menu = null;
+    current = null;
+  }
+
+  function choose(index) {
+    var select = current;
+    close();
+    if (select.selectedIndex !== index) {
+      select.selectedIndex = index;
+      select.dispatchEvent(new Event("input", { bubbles: true }));
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    select.focus();
+  }
+
+  function move(step) {
+    var opts = options();
+    var i = active;
+    do { i += step; } while (opts[i] && opts[i].disabled);
+    if (opts[i]) { active = i; paint(); }
+  }
+
+  document.addEventListener("mousedown", function (e) {
+    var select = e.target.closest && e.target.closest("select");
+    if (select && !select.multiple && !select.disabled && e.button === 0) {
+      e.preventDefault();
+      select.focus();
+      if (current === select) close(); else open(select);
+      return;
+    }
+    if (menu && !menu.contains(e.target)) close();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    var select = e.target.tagName === "SELECT" ? e.target : null;
+    if (!menu) {
+      var opener = e.key === " " || e.key === "Enter" || e.key === "F4" || (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp"));
+      if (select && !select.multiple && opener) { e.preventDefault(); open(select); }
+      return;
+    }
+    if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
+    else if (e.key === "Home") { e.preventDefault(); active = -1; move(1); }
+    else if (e.key === "End") { e.preventDefault(); active = options().length; move(-1); }
+    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(active); }
+    else if (e.key === "Escape") { e.preventDefault(); var s = current; close(); s.focus(); }
+    else if (e.key === "Tab") { close(); }
+    else if (e.key.length === 1) {
+      /* Type-ahead: jump to the first option starting with the typed letters. */
+      typed = Date.now() - typedAt > 700 ? e.key.toLowerCase() : typed + e.key.toLowerCase();
+      typedAt = Date.now();
+      var found = options().findIndex(function (o) { return !o.disabled && o.textContent.trim().toLowerCase().indexOf(typed) === 0; });
+      if (found >= 0) { active = found; paint(); }
+    }
+  });
+
+  /* Keep the list attached to its select while the page moves; close once the select is off screen. */
+  function follow(e) {
+    if (!menu || (e && menu.contains(e.target))) return;
+    var r = current.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) close();
+    else position();
+  }
+  window.addEventListener("resize", follow);
+  document.addEventListener("scroll", follow, true);
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   bindNav();
+  initDropdowns();
   bindImgFallback();
   bindConfirms();
   var page = document.body.dataset.page;
