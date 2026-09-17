@@ -1586,3 +1586,43 @@ class InfoPagesTests(TestCase):
         footer = Client().get("/").content.decode().split('class="site-footer"')[1]
         for url in ("/about/", "/contact/", "/help/", "/terms/", "/privacy/"):
             self.assertIn(f'href="{url}"', footer)
+
+
+class ClerkTokenVerificationTests(TestCase):
+    """Signs a real RS256 token so a missing crypto dependency fails here, not in production."""
+
+    def setUp(self):
+        import time
+
+        import jwt
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        from . import utils
+
+        self.utils = utils
+        self.private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(self.private_key.public_key()))
+        public_jwk.update(kid="test-kid", alg="RS256", use="sig")
+        utils._JWKS_CACHE.update(keys={"test-kid": public_jwk}, fetched=time.time())
+        self.addCleanup(utils._JWKS_CACHE.update, keys={}, fetched=0.0)
+
+    def token(self, **overrides):
+        import time
+
+        import jwt
+
+        now = int(time.time())
+        claims = {"sub": "user_real", "iat": now, "nbf": now, "exp": now + 60, "azp": "https://drivego.vercel.app"}
+        claims.update(overrides)
+        return jwt.encode(claims, self.private_key, algorithm="RS256", headers={"kid": "test-kid"})
+
+    @override_settings(CLERK_SECRET_KEY="sk_test")
+    def test_valid_token_returns_user_id(self):
+        self.assertEqual(self.utils.verify_clerk_session_token(self.token(), "drivego.vercel.app"), "user_real")
+
+    @override_settings(CLERK_SECRET_KEY="sk_test")
+    def test_expired_token_or_wrong_site_is_rejected(self):
+        import time
+
+        self.assertIsNone(self.utils.verify_clerk_session_token(self.token(exp=int(time.time()) - 600), "drivego.vercel.app"))
+        self.assertIsNone(self.utils.verify_clerk_session_token(self.token(), "evil.example.com"))

@@ -72,9 +72,11 @@ def verify_clerk_session_token(token, request_host=""):
         kid = jwt.get_unverified_header(token).get("kid")
         key = _clerk_signing_key(kid)
         if key is None:
+            logger.warning("Clerk token rejected: no signing key found for kid %s", kid)
             return None
         claims = jwt.decode(token, key, algorithms=["RS256"], options={"require": ["exp", "iat", "sub"]}, leeway=30)
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as exc:
+        logger.warning("Clerk token rejected: %s: %s", type(exc).__name__, exc)
         return None
     azp = claims.get("azp")
     if azp and request_host and urlsplit(azp).netloc != request_host:
