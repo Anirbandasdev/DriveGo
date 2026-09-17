@@ -15,11 +15,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-drivego-dev-only-change-me")
 _on_vercel = os.environ.get("VERCEL") == "1"
 DEBUG = os.environ.get("DEBUG", "0" if _on_vercel else "1") == "1"
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost,testserver,.vercel.app,.localhost").split(",") if h.strip()]
+_base_hosts = ["127.0.0.1", "localhost", "testserver", ".vercel.app", ".localhost"]
+ALLOWED_HOSTS = list(dict.fromkeys(_base_hosts + [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]))
 
 # Behind a reverse proxy (Vercel/load balancer) the request is already https,
 # so let Django trust the X-Forwarded-Proto header for is_secure()/absolute URLs.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 
 INSTALLED_APPS = [
@@ -34,6 +38,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "rental.middleware.EnsureCsrfCookieMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

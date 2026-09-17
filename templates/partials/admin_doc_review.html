@@ -1,0 +1,29 @@
+{% load rental_tags %}
+{# Document thumbnails + approve/reject for one booking. Expects b (booking). #}
+{% with docs=b.documents.all %}
+<div class="docs">
+  {% for d in docs %}
+  <div class="adoc">
+    <button type="button" class="adoc-open" data-doc-view="{% if d.storage_name %}{% url 'admin_document' d.pk %}{% endif %}" data-doc-kind="{% if d.is_pdf %}pdf{% else %}image{% endif %}" data-doc-title="{{ b.user }} — {{ d.get_document_type_display }}">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/></svg>
+      <span><b>{{ d.get_document_type_display }}</b><small>{% if d.is_pdf %}PDF{% else %}Image{% endif %} · {{ d.uploaded_at|date:"d M, h:i A" }}</small></span>
+    </button>
+    <span class="pill tone-{{ d.verification_status|tone }}">{{ d.get_verification_status_display }}</span>
+    {% if d.verification_status == 'REJECTED' and d.rejection_reason %}<p class="adoc-reason">“{{ d.rejection_reason }}”</p>{% endif %}
+  </div>
+  {% empty %}
+  <p class="muted-note">No documents uploaded yet.</p>
+  {% endfor %}
+</div>
+{% if docs and b.status != 'CANCELLED' and b.status != 'REJECTED' and b.status != 'COMPLETED' %}
+<div class="review-actions">
+  <form action="{% url 'admin_approve_docs' b.booking_id %}" method="post">{% csrf_token %}
+    <button class="btn btn-primary btn-sm" type="submit"><svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Approve{% if b.is_paid and b.status == 'PENDING_VERIFICATION' %} &amp; confirm{% endif %}</button>
+  </form>
+  <form class="reject" action="{% url 'admin_reject_docs' b.booking_id %}" method="post">{% csrf_token %}
+    <input type="text" name="reason" maxlength="300" placeholder="Reason, e.g. license photo is blurry" required aria-label="Rejection reason" />
+    <button class="btn btn-danger btn-sm" type="submit">Reject</button>
+  </form>
+</div>
+{% endif %}
+{% endwith %}

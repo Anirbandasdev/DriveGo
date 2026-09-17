@@ -1,5 +1,7 @@
-from datetime import timedelta
+import json
+from datetime import datetime, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.conf import settings
 from django.test import Client, TestCase, override_settings
@@ -124,7 +126,8 @@ class AdminAccessTests(TestCase):
     def test_navbar_hides_login_and_admin_for_customers(self):
         body = self.login_as("user_cust").get("/").content.decode()
         self.assertIn('href="/profile/" class="avatar"', body)
-        self.assertNotIn("Admin</a>", body.split("nav-links")[1].split("</nav>")[0])
+        self.assertNotIn("Admin</a>", body.split('class="sn-links"')[1].split("</nav>")[0])
+        self.assertNotIn("Admin console</a>", body)
 
     def test_navbar_shows_admin_link_for_admins(self):
         body = self.login_as("user_admin", "ADMIN").get("/").content.decode()
@@ -277,27 +280,37 @@ class ListedAvailabilityTests(TestCase):
         b.save()
         return b
 
-    def test_future_confirmed_booking_hides_car_from_listing(self):
+    def test_future_booking_only_blocks_its_own_window(self):
         self.book_future(days=1)
-        self.assertFalse(self.car.is_listed_available())
         self.assertTrue(self.car.is_available_for(self.now, self.now + timedelta(hours=1)))
         self.assertFalse(self.car.is_available_for(self.now + timedelta(days=1), self.now + timedelta(days=3)))
-
-    def test_unbooked_car_is_listed_available(self):
-        self.assertTrue(self.car.is_listed_available())
+        self.assertTrue(self.car.is_available_for(self.now + timedelta(days=5), self.now + timedelta(days=7)))
 
     def test_cars_page_no_dates_shows_booked_badge(self):
         self.book_future(days=1)
         html = Client().get("/cars/").content.decode()
-        block = html.split('class="car-card"')[1]
-        self.assertIn("car-badge no", block)
+        block = html.split('<article class="vc')[1].split("</article>")[0]
+        self.assertIn("vc-badge is-no", block)
         self.assertIn("Booked", block)
-        self.assertIn("car-booked-chip", block)
+        self.assertIn("vc-note", block)
+        self.assertIn("Free from", block)
 
-    def test_completed_booking_does_not_hide_car(self):
+    def test_cars_page_shows_booked_car_as_available_for_free_dates(self):
+        self.book_future(days=1)
+        start = timezone.localdate() + timedelta(days=10)
+        html = Client().get("/cars/", {
+            "pickup_date": start.isoformat(), "pickup_time": "10:00",
+            "drop_date": (start + timedelta(days=2)).isoformat(), "drop_time": "10:00",
+        }).content.decode()
+        block = html.split('<article class="vc')[1].split("</article>")[0]
+        self.assertIn("vc-badge is-ok", block)
+        self.assertIn("total", block)
+        self.assertIn(f"pickup_date={start.isoformat()}", block)
+
+    def test_completed_booking_does_not_block(self):
         self.book_future(days=-5)
         Booking.objects.filter(booking_id="DG-LIST-0001").update(status=Booking.Status.COMPLETED)
-        self.assertTrue(self.car.is_listed_available())
+        self.assertTrue(self.car.is_available_for(self.now - timedelta(days=5), self.now + timedelta(days=1)))
 
 
 class PaymentGuardTests(TestCase):
@@ -346,6 +359,8 @@ class PaymentGuardTests(TestCase):
     def test_demo_mode_completes_booking_when_keys_configured(self):
         SiteSetting.set("demo_mode", "on")
         booking = self.make("DG-PAY-DEMO", Booking.Status.PENDING, Booking.PaymentStatus.PENDING)
+        for doc_type in Document.DocType.values:
+            Document.objects.create(booking=booking, document_type=doc_type, file="")
         client = self.login()
         client.get(f"/payment/{booking.booking_id}/")
         booking.refresh_from_db()
@@ -384,7 +399,8 @@ class CancelBookingTests(TestCase):
         b = Booking.objects.create(
             booking_id=booking_id, user=user, car=self.car, pickup_location=self.loc,
             pickup_datetime=self.now + timedelta(days=2), dropoff_datetime=self.now + timedelta(days=4),
-            status=status, payment_status=pay)
+            status=status, payment_status=pay,
+            razorpay_payment_id=f"pay_mock_{booking_id}" if pay == Booking.PaymentStatus.PAID else "")
         b.apply_price()
         b.save()
         return b
@@ -396,7 +412,7 @@ class CancelBookingTests(TestCase):
         b.refresh_from_db()
         self.assertEqual(b.status, Booking.Status.CANCELLED)
         self.assertEqual(b.payment_status, Booking.PaymentStatus.REFUNDED)
-        self.assertTrue(self.car.is_listed_available())
+        self.assertTrue(self.car.is_available_for(b.pickup_datetime, b.dropoff_datetime))
 
     def test_cancel_unpaid_pending_no_refund(self):
         b = self.make("DG-CANC-0002", Booking.Status.PENDING, Booking.PaymentStatus.PENDING)
@@ -461,13 +477,16 @@ class CarBlockTests(TestCase):
         self.assertFalse(self.car.is_available_for(self.now + timedelta(days=1, hours=1), self.now + timedelta(days=2)))
         self.assertTrue(self.car.is_available_for(self.now + timedelta(days=5), self.now + timedelta(days=6)))
 
-    def test_future_block_hides_car_from_listing(self):
+    def test_block_is_skipped_by_next_available_start(self):
         CarBlock.objects.create(
             car=self.car,
             start_datetime=self.now + timedelta(days=2),
             end_datetime=self.now + timedelta(days=4),
         )
-        self.assertFalse(self.car.is_listed_available())
+        pickup = self.now + timedelta(days=3)
+        nxt = self.car.next_available_start(pickup, pickup + timedelta(days=1))
+        self.assertGreaterEqual(nxt, self.now + timedelta(days=4))
+        self.assertTrue(self.car.is_available_for(nxt, nxt + timedelta(days=1)))
 
     def test_admin_can_add_block(self):
         admin = Customer.objects.create(clerk_user_id="user_ablk", email="blk@example.com", role="ADMIN")
@@ -512,20 +531,22 @@ class AdminControlsTests(TestCase):
             booking_id=bid, user=self.user, car=self.car, pickup_location=self.loc,
             pickup_datetime=self.now + timedelta(days=3), dropoff_datetime=self.now + timedelta(days=5),
             status=status, payment_status=pay,
+            razorpay_payment_id=f"pay_mock_{bid}" if pay == Booking.PaymentStatus.PAID else "",
         )
         b.apply_price()
         b.save()
         return b
 
-    def add_doc(self, b, verified=False):
+    def add_doc(self, b, verified=False, doc_type=Document.DocType.DRIVING_LICENSE):
         return Document.objects.create(
-            booking=b, document_type=Document.DocType.LICENSE_FRONT, file="",
+            booking=b, document_type=doc_type, file="",
             verification_status=Document.VerificationStatus.VERIFIED if verified else Document.VerificationStatus.PENDING,
         )
 
     def test_admin_approve_docs_confirms_paid_booking(self):
         b = self.make("DG-ADM-0001")
         doc = self.add_doc(b)
+        self.add_doc(b, doc_type=Document.DocType.GOVT_ID)
         self.login().post(f"/dashboard/bookings/{b.booking_id}/docs/approve/")
         doc.refresh_from_db()
         b.refresh_from_db()
@@ -560,7 +581,7 @@ class AdminControlsTests(TestCase):
         b.refresh_from_db()
         self.assertEqual(b.status, Booking.Status.CANCELLED)
         self.assertEqual(b.payment_status, Booking.PaymentStatus.REFUNDED)
-        self.assertTrue(self.car.is_listed_available())
+        self.assertTrue(self.car.is_available_for(b.pickup_datetime, b.dropoff_datetime))
 
     def test_trip_lifecycle(self):
         b = self.make("DG-ADM-0006", status=Booking.Status.CONFIRMED)
@@ -587,3 +608,969 @@ class AdminControlsTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Car.objects.filter(registration_number="WB06T9912").exists())
+
+    def test_verification_queue_lists_paid_bookings_not_abandoned_holds(self):
+        paid = self.make("DG-ADM-0008")
+        self.add_doc(paid)
+        stale = self.make("DG-ADM-0009", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
+        Booking.objects.filter(pk=stale.pk).update(
+            created_at=self.now - timedelta(minutes=settings.BOOKING_HOLD_MINUTES + 30))
+        response = self.login().get("/dashboard/verifications/")
+        self.assertContains(response, "DG-ADM-0008")
+        self.assertNotContains(response, "DG-ADM-0009")
+
+
+class ExpiredPendingTests(TestCase):
+    """Test that expired PENDING bookings don't appear as 'upcoming'."""
+
+    def setUp(self):
+        from django.conf import settings as _s
+        self.loc = Location.objects.create(name="Test", address="Addr", city="Kolkata")
+        self.car = Car.objects.create(
+            location=self.loc, category="SUV", brand="Toyota", model="Test",
+            registration_number="WB06T0001", seats=5, transmission="Manual",
+            fuel_type="Petrol", price_per_day=1500, status="AVAILABLE",
+        )
+        self.user = Customer.objects.create(clerk_user_id="user_test", email="test@example.com")
+        self.now = timezone.now()
+        self.hold_minutes = int(getattr(_s, "BOOKING_HOLD_MINUTES", 60))
+
+    def login(self):
+        client = Client()
+        session = client.session
+        session["clerk_user_id"] = "user_test"
+        session["role"] = "CUSTOMER"
+        session.save()
+        return client
+
+    def make_pending_booking(self, minutes_ago):
+        booking = Booking.objects.create(
+            booking_id=f"DG-PEND-{minutes_ago:04d}",
+            user=self.user, car=self.car, pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=1),
+            dropoff_datetime=self.now + timedelta(days=2),
+            status=Booking.Status.PENDING, payment_status=Booking.PaymentStatus.PENDING,
+        )
+        booking.apply_price()
+        booking.save()
+        Booking.objects.filter(pk=booking.pk).update(
+            created_at=self.now - timedelta(minutes=minutes_ago)
+        )
+        return booking
+
+    def test_fresh_pending_shows_as_upcoming(self):
+        self.make_pending_booking(self.hold_minutes // 2)
+        client = self.login()
+        response = client.get("/my-bookings/?tab=upcoming")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f"DG-PEND-{self.hold_minutes//2:04d}")
+
+    def test_expired_pending_not_shown_as_upcoming(self):
+        self.make_pending_booking(self.hold_minutes + 10)
+        client = self.login()
+        response = client.get("/my-bookings/?tab=upcoming")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, f"DG-PEND-{self.hold_minutes+10:04d}")
+
+
+class ConfirmationEdgeCaseTests(TestCase):
+    def setUp(self):
+        from django.conf import settings as _s
+        self.loc = Location.objects.create(name="Test", address="Addr", city="Kolkata")
+        self.car = Car.objects.create(
+            location=self.loc, category="SUV", brand="Toyota", model="Test",
+            registration_number="WB06T0001", seats=5, transmission="Manual",
+            fuel_type="Petrol", price_per_day=1500, status="AVAILABLE",
+        )
+        self.user = Customer.objects.create(clerk_user_id="user_test", email="test@example.com")
+        self.now = timezone.now()
+
+    def login(self):
+        client = Client()
+        session = client.session
+        session["clerk_user_id"] = "user_test"
+        session["role"] = "CUSTOMER"
+        session.save()
+        return client
+
+    def test_cancelled_paid_booking_redirects_from_confirmation(self):
+        booking = Booking.objects.create(
+            booking_id="DG-PAID-CANC", user=self.user, car=self.car,
+            pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=1),
+            dropoff_datetime=self.now + timedelta(days=2),
+            status=Booking.Status.CANCELLED, payment_status=Booking.PaymentStatus.PAID,
+        )
+        booking.apply_price()
+        booking.save()
+        client = self.login()
+        response = client.get(f"/confirmation/{booking.booking_id}/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/my-bookings/", response["Location"])
+
+    def test_rejected_paid_booking_redirects_from_confirmation(self):
+        booking = Booking.objects.create(
+            booking_id="DG-PAID-REJ", user=self.user, car=self.car,
+            pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=1),
+            dropoff_datetime=self.now + timedelta(days=2),
+            status=Booking.Status.REJECTED, payment_status=Booking.PaymentStatus.PAID,
+        )
+        booking.apply_price()
+        booking.save()
+        client = self.login()
+        response = client.get(f"/confirmation/{booking.booking_id}/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/my-bookings/", response["Location"])
+
+
+class CancelBookingPreserveTabTests(TestCase):
+    def setUp(self):
+        from django.conf import settings as _s
+        self.loc = Location.objects.create(name="Test", address="Addr", city="Kolkata")
+        self.car = Car.objects.create(
+            location=self.loc, category="SUV", brand="Toyota", model="Test",
+            registration_number="WB06T0001", seats=5, transmission="Manual",
+            fuel_type="Petrol", price_per_day=1500, status="AVAILABLE",
+        )
+        self.user = Customer.objects.create(clerk_user_id="user_test", email="test@example.com")
+        self.now = timezone.now()
+        self.hold_minutes = int(getattr(_s, "BOOKING_HOLD_MINUTES", 60))
+
+    def login(self):
+        client = Client()
+        session = client.session
+        session["clerk_user_id"] = "user_test"
+        session["role"] = "CUSTOMER"
+        session.save()
+        return client
+
+    def test_cancel_preserves_upcoming_tab(self):
+        booking = Booking.objects.create(
+            booking_id="DG-UPCOMING", user=self.user, car=self.car,
+            pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=1),
+            dropoff_datetime=self.now + timedelta(days=2),
+            status=Booking.Status.CONFIRMED, payment_status=Booking.PaymentStatus.PENDING,
+        )
+        booking.apply_price()
+        booking.save()
+        client = self.login()
+        response = client.post(
+            f"/bookings/{booking.booking_id}/cancel/",
+            data={"tab": "upcoming"},
+            HTTP_REFERER=f"/my-bookings/?tab=upcoming",
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/my-bookings/?tab=upcoming", response["Location"])
+
+
+class CleanupCommandTests(TestCase):
+    def setUp(self):
+        from django.conf import settings as _s
+        self.loc = Location.objects.create(name="Test", address="Addr", city="Kolkata")
+        self.car = Car.objects.create(
+            location=self.loc, category="SUV", brand="Toyota", model="Test",
+            registration_number="WB06T0001", seats=5, transmission="Manual",
+            fuel_type="Petrol", price_per_day=1500, status="AVAILABLE",
+        )
+        self.user = Customer.objects.create(clerk_user_id="user_test", email="test@example.com")
+        self.now = timezone.now()
+        self.hold_minutes = int(getattr(_s, "BOOKING_HOLD_MINUTES", 60))
+
+    def make_pending_booking(self, minutes_ago):
+        booking = Booking.objects.create(
+            booking_id=f"DG-CLEANUP-{minutes_ago:04d}",
+            user=self.user, car=self.car, pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=1),
+            dropoff_datetime=self.now + timedelta(days=2),
+            status=Booking.Status.PENDING, payment_status=Booking.PaymentStatus.PENDING,
+        )
+        booking.apply_price()
+        booking.save()
+        Booking.objects.filter(pk=booking.pk).update(
+            created_at=self.now - timedelta(minutes=minutes_ago)
+        )
+        return booking
+
+    def test_cleanup_removes_old_pending_bookings(self):
+        self.make_pending_booking(self.hold_minutes // 2)
+        self.make_pending_booking(self.hold_minutes * 3)
+        from django.core.management import call_command
+        import io
+        out = io.StringIO()
+        call_command("cleanup_pending_bookings", stdout=out)
+        self.assertEqual(Booking.objects.count(), 1)
+        remaining = Booking.objects.first()
+        self.assertTrue(remaining.booking_id.startswith("DG-CLEANUP-0030"))
+        self.assertIn("Deleted 1 expired PENDING booking(s)", out.getvalue())
+
+    def test_cleanup_no_old_bookings(self):
+        self.make_pending_booking(self.hold_minutes // 2)
+        self.make_pending_booking(self.hold_minutes)
+        from django.core.management import call_command
+        import io
+        out = io.StringIO()
+        call_command("cleanup_pending_bookings", stdout=out)
+        self.assertEqual(Booking.objects.count(), 2)
+        self.assertIn("No expired PENDING bookings to clean up", out.getvalue())
+
+
+class AdminBookingsFilterTests(TestCase):
+    def setUp(self):
+        from django.conf import settings as _s
+        self.loc = Location.objects.create(name="Test", address="Addr", city="Kolkata")
+        self.car = Car.objects.create(
+            location=self.loc, category="SUV", brand="Toyota", model="Test",
+            registration_number="WB06T0001", seats=5, transmission="Manual",
+            fuel_type="Petrol", price_per_day=1500, status="AVAILABLE",
+        )
+        self.user = Customer.objects.create(clerk_user_id="user_test", email="test@example.com")
+        self.admin = Customer.objects.create(
+            clerk_user_id="admin_test", email="admin@example.com", role="ADMIN"
+        )
+        self.now = timezone.now()
+
+    def login_as_admin(self):
+        client = Client()
+        session = client.session
+        session["clerk_user_id"] = "admin_test"
+        session["role"] = "ADMIN"
+        session.save()
+        return client
+
+    def test_admin_bookings_excludes_cancelled_by_default(self):
+        active = Booking.objects.create(
+            booking_id="DG-ACTIVE", user=self.user, car=self.car,
+            pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=1),
+            dropoff_datetime=self.now + timedelta(days=2),
+            status=Booking.Status.CONFIRMED, payment_status=Booking.PaymentStatus.PAID,
+        )
+        cancelled = Booking.objects.create(
+            booking_id="DG-CANCELLED", user=self.user, car=self.car,
+            pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=2),
+            dropoff_datetime=self.now + timedelta(days=3),
+            status=Booking.Status.CANCELLED, payment_status=Booking.PaymentStatus.REFUNDED,
+        )
+        active.apply_price(); cancelled.apply_price()
+        active.save(); cancelled.save()
+        client = self.login_as_admin()
+        response = client.get("/dashboard/bookings/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "DG-ACTIVE")
+        self.assertNotContains(response, "DG-CANCELLED")
+
+    def test_admin_bookings_shows_cancelled_when_requested(self):
+        active = Booking.objects.create(
+            booking_id="DG-ACTIVE", user=self.user, car=self.car,
+            pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=1),
+            dropoff_datetime=self.now + timedelta(days=2),
+            status=Booking.Status.CONFIRMED, payment_status=Booking.PaymentStatus.PAID,
+        )
+        cancelled = Booking.objects.create(
+            booking_id="DG-CANCELLED", user=self.user, car=self.car,
+            pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=2),
+            dropoff_datetime=self.now + timedelta(days=3),
+            status=Booking.Status.CANCELLED, payment_status=Booking.PaymentStatus.REFUNDED,
+        )
+        active.apply_price(); cancelled.apply_price()
+        active.save(); cancelled.save()
+        client = self.login_as_admin()
+        response = client.get("/dashboard/bookings/?status=cancelled")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "DG-CANCELLED")
+        self.assertNotContains(response, "DG-ACTIVE")
+
+
+class RegressionFixTests(TestCase):
+    def setUp(self):
+        self.loc = Location.objects.create(name="Regression", address="Addr", city="Kolkata")
+        self.car = Car.objects.create(
+            location=self.loc, category="SUV", brand="Toyota", model="Regression",
+            registration_number="WB06T9999", seats=5, transmission="Manual",
+            fuel_type="Petrol", price_per_day=1500, status="AVAILABLE",
+        )
+        self.usr = Customer.objects.create(clerk_user_id="user_reg", email="reg@example.com")
+        self.now = timezone.now()
+
+    def login(self):
+        client = Client()
+        session = client.session
+        session["clerk_user_id"] = "user_reg"
+        session["role"] = "CUSTOMER"
+        session.save()
+        return client
+
+    def make(self, booking_id):
+        b = Booking.objects.create(
+            booking_id=booking_id, user=self.usr, car=self.car, pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=3), dropoff_datetime=self.now + timedelta(days=4),
+            status=Booking.Status.PENDING, payment_status=Booking.PaymentStatus.PENDING,
+            razorpay_order_id=f"order_mock_{booking_id}",
+        )
+        b.apply_price()
+        b.save()
+        return b
+
+    def test_payment_verify_honors_admin_car_block(self):
+        booking = self.make("DG-REG-BLK")
+        CarBlock.objects.create(
+            car=self.car, start_datetime=self.now + timedelta(days=3),
+            end_datetime=self.now + timedelta(days=4),
+        )
+        client = self.login()
+        response = client.post(
+            "/payment/verify/",
+            data=json.dumps({
+                "booking_id": booking.booking_id,
+                "razorpay_order_id": booking.razorpay_order_id,
+                "razorpay_payment_id": f"pay_mock_{booking.booking_id}",
+                "razorpay_signature": "mock",
+            }),
+            content_type="application/json",
+        )
+        booking.refresh_from_db()
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(booking.status, Booking.Status.CANCELLED)
+        self.assertEqual(booking.payment_status, Booking.PaymentStatus.REFUNDED)
+
+    def test_payment_retry_rotates_razorpay_order(self):
+        SiteSetting.set("demo_mode", "on")
+        booking = self.make("DG-REG-RTRY")
+        for doc_type in Document.DocType.values:
+            Document.objects.create(booking=booking, document_type=doc_type, file="")
+        booking.razorpay_order_id = "order_old_attempt"
+        booking.save(update_fields=["razorpay_order_id"])
+        client = self.login()
+        client.get(f"/payment/{booking.booking_id}/")
+        booking.refresh_from_db()
+        self.assertTrue(booking.razorpay_order_id.startswith("order_mock_"))
+        self.assertNotEqual(booking.razorpay_order_id, "order_old_attempt")
+
+    @override_settings(RAZORPAY_MOCK=True)
+    def test_mock_mode_with_non_mock_order_returns_failed_not_500(self):
+        booking = self.make("DG-REG-MOCK")
+        booking.razorpay_order_id = "order_real_101"
+        booking.save(update_fields=["razorpay_order_id"])
+        client = self.login()
+        response = client.post(
+            "/payment/verify/",
+            data=json.dumps({
+                "booking_id": booking.booking_id,
+                "razorpay_order_id": "order_real_101",
+                "razorpay_payment_id": "pay_mock_x",
+                "razorpay_signature": "mock",
+            }),
+            content_type="application/json",
+        )
+        booking.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(booking.payment_status, Booking.PaymentStatus.PAID)
+
+    def test_rejected_booking_has_no_confirmation_view_link(self):
+        rejected = Booking.objects.create(
+            booking_id="DG-REG-REJ", user=self.usr, car=self.car, pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=3), dropoff_datetime=self.now + timedelta(days=4),
+            status=Booking.Status.REJECTED, payment_status=Booking.PaymentStatus.PENDING,
+        )
+        rejected.apply_price()
+        rejected.save()
+        html = self.login().get("/my-bookings/?tab=cancelled").content.decode()
+        self.assertIn("DG-REG-REJ", html)
+        self.assertNotIn(f'href="/confirmation/{rejected.booking_id}/"', html)
+
+    def test_document_form_allows_submit_with_all_docs_present(self):
+        booking = self.make("DG-REG-DOCS")
+        Document.objects.create(booking=booking, document_type=Document.DocType.DRIVING_LICENSE, file="")
+        Document.objects.create(booking=booking, document_type=Document.DocType.GOVT_ID, file="")
+        client = self.login()
+        response = client.post(f"/verification/{booking.booking_id}/", {})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], f"/delivery/{booking.booking_id}/")
+
+
+def _login(user_id):
+    client = Client()
+    session = client.session
+    session["clerk_user_id"] = user_id
+    session.save()
+    return client
+
+
+class FlowFixtureMixin:
+    def setUp(self):
+        self.loc = Location.objects.create(name="Flow", address="Park Street", city="Kolkata", phone="033000")
+        self.car = Car.objects.create(
+            location=self.loc, category="Sedan", brand="Honda", model="City",
+            registration_number="WB06F0001", seats=5, transmission="Automatic",
+            fuel_type="Petrol", price_per_day=2000, status="AVAILABLE",
+        )
+        self.user = Customer.objects.create(clerk_user_id="user_flow", email="flow@example.com", full_name="Flow User")
+        self.other = Customer.objects.create(clerk_user_id="user_flow2", email="flow2@example.com")
+        self.admin = Customer.objects.create(clerk_user_id="user_flow_admin", email="fa@example.com", role="ADMIN")
+        self.now = timezone.now()
+
+    def make(self, bid, days_from_now=3, length=2, user=None, status=Booking.Status.CONFIRMED,
+             pay=Booking.PaymentStatus.PAID, docs=False, verified=False):
+        b = Booking.objects.create(
+            booking_id=bid, user=user or self.user, car=self.car, pickup_location=self.loc,
+            pickup_datetime=self.now + timedelta(days=days_from_now),
+            dropoff_datetime=self.now + timedelta(days=days_from_now + length),
+            status=status, payment_status=pay,
+            razorpay_payment_id=f"pay_mock_{bid}" if pay == Booking.PaymentStatus.PAID else "",
+        )
+        b.apply_price()
+        b.save()
+        if docs:
+            for doc_type in Document.DocType.values:
+                Document.objects.create(
+                    booking=b, document_type=doc_type, file="",
+                    verification_status=Document.VerificationStatus.VERIFIED if verified else Document.VerificationStatus.PENDING,
+                )
+        return b
+
+    @staticmethod
+    def dates(start, days):
+        return {
+            "pickup_date": start.strftime("%Y-%m-%d"), "pickup_time": "10:00",
+            "drop_date": (start + timedelta(days=days)).strftime("%Y-%m-%d"), "drop_time": "10:00",
+        }
+
+
+class BookedCarOtherDatesTests(FlowFixtureMixin, TestCase):
+    """A car booked for one window must stay bookable for every other window."""
+
+    def test_detail_page_enables_booking_for_free_dates(self):
+        self.make("DG-FLOW-0001", days_from_now=2, length=3)
+        free = timezone.localdate() + timedelta(days=12)
+        html = Client().get(f"/cars/{self.car.pk}/", self.dates(free, 2)).content.decode()
+        self.assertIn("Available for your dates", html)
+        self.assertIn("Book for these dates", html)
+        self.assertNotIn("data-av-submit disabled", html)
+
+    def test_detail_page_without_dates_still_offers_booking_when_default_window_free(self):
+        self.make("DG-FLOW-0002", days_from_now=20, length=2)
+        html = Client().get(f"/cars/{self.car.pk}/").content.decode()
+        self.assertIn("Available for your dates", html)
+
+    def test_availability_api_reports_clash_and_next_free_slot(self):
+        booked = self.make("DG-FLOW-0003", days_from_now=2, length=3)
+        start = timezone.localtime(booked.pickup_datetime) + timedelta(hours=1)
+        data = Client().get(f"/cars/{self.car.pk}/availability/", {
+            "pickup_date": start.strftime("%Y-%m-%d"), "pickup_time": start.strftime("%H:%M"),
+            "drop_date": (start + timedelta(days=1)).strftime("%Y-%m-%d"), "drop_time": start.strftime("%H:%M"),
+        }).json()
+        self.assertFalse(data["available"])
+        self.assertEqual(data["reason"], "booked")
+        self.assertIsNotNone(data["clash"])
+        suggestion = data["suggestion"]
+        self.assertIsNotNone(suggestion)
+        pickup = timezone.make_aware(datetime.strptime(f"{suggestion['pickup_date']} {suggestion['pickup_time']}", "%Y-%m-%d %H:%M"))
+        self.assertGreaterEqual(pickup, booked.dropoff_datetime)
+        self.assertTrue(self.car.is_available_for(pickup, pickup + timedelta(days=1)))
+
+    def test_availability_api_free_window_returns_price(self):
+        free = timezone.localdate() + timedelta(days=15)
+        data = Client().get(f"/cars/{self.car.pk}/availability/", self.dates(free, 3)).json()
+        self.assertTrue(data["available"])
+        self.assertEqual(data["price"]["days"], 3)
+        self.assertEqual(data["price"]["rental_amount"], 6000)
+
+    def test_availability_api_rejects_past_and_missing_dates(self):
+        past = timezone.localdate() - timedelta(days=3)
+        self.assertEqual(Client().get(f"/cars/{self.car.pk}/availability/", self.dates(past, 1)).json()["reason"], "past")
+        self.assertEqual(Client().get(f"/cars/{self.car.pk}/availability/").status_code, 400)
+
+    def test_next_available_start_skips_back_to_back_bookings(self):
+        first = self.make("DG-FLOW-0004", days_from_now=2, length=2)
+        second = Booking.objects.create(
+            booking_id="DG-FLOW-0005", user=self.other, car=self.car, pickup_location=self.loc,
+            pickup_datetime=first.dropoff_datetime, dropoff_datetime=first.dropoff_datetime + timedelta(days=2),
+            status=Booking.Status.CONFIRMED, payment_status=Booking.PaymentStatus.PAID,
+        )
+        pickup = first.pickup_datetime + timedelta(hours=2)
+        nxt = self.car.next_available_start(pickup, pickup + timedelta(days=1))
+        self.assertGreaterEqual(nxt, second.dropoff_datetime)
+
+    def test_booking_dates_post_for_free_window_creates_hold(self):
+        self.make("DG-FLOW-0006", days_from_now=2, length=3, user=self.other)
+        free = timezone.localdate() + timedelta(days=12)
+        response = _login("user_flow").post(f"/booking/{self.car.pk}/", self.dates(free, 2))
+        self.assertEqual(response.status_code, 302)
+        hold = Booking.objects.filter(user=self.user, status=Booking.Status.PENDING).get()
+        self.assertIn(f"/verification/{hold.booking_id}/", response["Location"])
+
+    def test_booking_dates_post_for_taken_window_shows_suggestion(self):
+        booked = self.make("DG-FLOW-0007", days_from_now=2, length=3, user=self.other)
+        start = timezone.localtime(booked.pickup_datetime)
+        response = _login("user_flow").post(f"/booking/{self.car.pk}/", {
+            "pickup_date": start.strftime("%Y-%m-%d"), "pickup_time": start.strftime("%H:%M"),
+            "drop_date": (start + timedelta(days=1)).strftime("%Y-%m-%d"), "drop_time": start.strftime("%H:%M"),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Use these dates")
+        self.assertFalse(Booking.objects.filter(user=self.user).exists())
+
+    def test_own_unpaid_hold_does_not_block_changing_dates(self):
+        free = timezone.localdate() + timedelta(days=12)
+        client = _login("user_flow")
+        client.post(f"/booking/{self.car.pk}/", self.dates(free, 3))
+        first = Booking.objects.get(user=self.user)
+        Document.objects.create(booking=first, document_type=Document.DocType.DRIVING_LICENSE, file="")
+        response = client.post(f"/booking/{self.car.pk}/", self.dates(free + timedelta(days=1), 3))
+        self.assertEqual(response.status_code, 302)
+        first.refresh_from_db()
+        self.assertEqual(first.status, Booking.Status.CANCELLED)
+        second = Booking.objects.exclude(pk=first.pk).get(user=self.user)
+        self.assertEqual(second.status, Booking.Status.PENDING)
+        self.assertEqual(second.documents.count(), 1)
+
+    def test_resubmitting_same_dates_reuses_hold(self):
+        free = timezone.localdate() + timedelta(days=12)
+        client = _login("user_flow")
+        client.post(f"/booking/{self.car.pk}/", self.dates(free, 2))
+        client.post(f"/booking/{self.car.pk}/", self.dates(free, 2))
+        self.assertEqual(Booking.objects.filter(user=self.user).count(), 1)
+
+    def test_login_redirect_keeps_selected_dates(self):
+        free = timezone.localdate() + timedelta(days=12)
+        response = Client().get(f"/booking/{self.car.pk}/", self.dates(free, 2))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("pickup_date%3D" + free.isoformat(), response["Location"])
+
+
+class BookingIdTests(FlowFixtureMixin, TestCase):
+    def test_id_does_not_collide_after_deleting_an_earlier_booking(self):
+        from .views import generate_booking_id
+
+        first = generate_booking_id()
+        self.make(first)
+        second = generate_booking_id()
+        self.make(second)
+        Booking.objects.filter(booking_id=first).delete()
+        self.assertNotEqual(generate_booking_id(), second)
+
+
+class CheckoutGuardTests(FlowFixtureMixin, TestCase):
+    def test_payment_requires_documents(self):
+        hold = self.make("DG-GRD-0001", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
+        response = _login("user_flow").get(f"/payment/{hold.booking_id}/")
+        self.assertRedirects(response, f"/verification/{hold.booking_id}/", fetch_redirect_response=False)
+
+    def test_delivery_is_locked_after_payment(self):
+        paid = self.make("DG-GRD-0002", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        client = _login("user_flow")
+        response = client.post(f"/delivery/{paid.booking_id}/", {
+            "delivery_method": "HOME_DELIVERY", "delivery_address": "1 Road", "delivery_city": "Kolkata", "delivery_pincode": "700001",
+        })
+        self.assertRedirects(response, f"/confirmation/{paid.booking_id}/", fetch_redirect_response=False)
+        paid.refresh_from_db()
+        self.assertEqual(paid.delivery_method, "STORE_PICKUP")
+
+    def test_delivery_pincode_validated(self):
+        hold = self.make("DG-GRD-0003", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        response = _login("user_flow").post(f"/delivery/{hold.booking_id}/", {
+            "delivery_method": "HOME_DELIVERY", "delivery_address": "1 Road", "delivery_city": "Kolkata", "delivery_pincode": "12ab",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "valid 6-digit PIN")
+
+    def test_expired_hold_is_refreshed_when_car_still_free(self):
+        hold = self.make("DG-GRD-0004", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        Booking.objects.filter(pk=hold.pk).update(created_at=self.now - timedelta(minutes=settings.BOOKING_HOLD_MINUTES + 5))
+        response = _login("user_flow").get(f"/summary/{hold.booking_id}/")
+        self.assertEqual(response.status_code, 200)
+        hold.refresh_from_db()
+        self.assertFalse(hold.hold_expired)
+
+    def test_expired_hold_is_released_when_someone_else_booked(self):
+        hold = self.make("DG-GRD-0005", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        Booking.objects.filter(pk=hold.pk).update(created_at=self.now - timedelta(minutes=settings.BOOKING_HOLD_MINUTES + 5))
+        self.make("DG-GRD-0006", user=self.other)
+        response = _login("user_flow").get(f"/summary/{hold.booking_id}/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f"/cars/{self.car.pk}/", response["Location"])
+        hold.refresh_from_db()
+        self.assertEqual(hold.status, Booking.Status.CANCELLED)
+
+    def test_customer_cannot_cancel_trip_in_progress(self):
+        trip = self.make("DG-GRD-0007", days_from_now=-1, length=3, status=Booking.Status.ACTIVE)
+        _login("user_flow").post(f"/bookings/{trip.booking_id}/cancel/")
+        trip.refresh_from_db()
+        self.assertEqual(trip.status, Booking.Status.ACTIVE)
+        self.assertEqual(trip.payment_status, Booking.PaymentStatus.PAID)
+
+    def test_payment_with_verified_documents_confirms_immediately(self):
+        hold = self.make("DG-GRD-0008", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True, verified=True)
+        hold.razorpay_order_id = "order_mock_DG-GRD-0008"
+        hold.save(update_fields=["razorpay_order_id"])
+        response = _login("user_flow").post("/payment/verify/", data=json.dumps({
+            "booking_id": hold.booking_id, "razorpay_order_id": hold.razorpay_order_id,
+            "razorpay_payment_id": "pay_mock_DG-GRD-0008", "razorpay_signature": "mock",
+        }), content_type="application/json")
+        self.assertTrue(response.json()["ok"])
+        hold.refresh_from_db()
+        self.assertEqual(hold.status, Booking.Status.CONFIRMED)
+
+    @override_settings(RAZORPAY_KEY_ID="rzp_live", RAZORPAY_KEY_SECRET="secret", RAZORPAY_MOCK=False)
+    def test_mock_order_rejected_once_demo_mode_is_off(self):
+        hold = self.make("DG-GRD-0009", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold.razorpay_order_id = "order_mock_DG-GRD-0009"
+        hold.save(update_fields=["razorpay_order_id"])
+        response = _login("user_flow").post("/payment/verify/", data=json.dumps({
+            "booking_id": hold.booking_id, "razorpay_order_id": hold.razorpay_order_id,
+            "razorpay_payment_id": "pay_mock_DG-GRD-0009", "razorpay_signature": "mock",
+        }), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        hold.refresh_from_db()
+        self.assertNotEqual(hold.payment_status, Booking.PaymentStatus.PAID)
+
+    def test_document_upload_sends_file_bytes_to_storage(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        hold = self.make("DG-GRD-0010", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
+        captured = {}
+
+        def fake_upload(uploaded, path):
+            uploaded.seek(0)
+            captured[path] = uploaded.read()
+            return f"documents/{path}"
+
+        with patch("rental.views.upload_document_file", side_effect=fake_upload):
+            response = _login("user_flow").post(f"/verification/{hold.booking_id}/", {
+                "driving_license": SimpleUploadedFile("my license.png", b"PNGDATA", content_type="image/png"),
+                "govt_id": SimpleUploadedFile("id.pdf", b"%PDF-1", content_type="application/pdf"),
+            })
+        self.assertRedirects(response, f"/delivery/{hold.booking_id}/", fetch_redirect_response=False)
+        self.assertIn(b"PNGDATA", captured.values())
+        doc = hold.documents.get(document_type=Document.DocType.DRIVING_LICENSE)
+        self.assertTrue(doc.file_reference.startswith("documents/"))
+        self.assertNotIn(" ", doc.file_reference)
+
+    def test_rejected_document_must_be_replaced(self):
+        paid = self.make("DG-GRD-0011", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        paid.documents.filter(document_type=Document.DocType.GOVT_ID).update(
+            verification_status=Document.VerificationStatus.REJECTED, rejection_reason="Blurry")
+        client = _login("user_flow")
+        page = client.get(f"/verification/{paid.booking_id}/")
+        self.assertContains(page, "Blurry")
+        response = client.post(f"/verification/{paid.booking_id}/", {})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Still required")
+
+
+class CustomerPagesRenderTests(FlowFixtureMixin, TestCase):
+    def test_every_checkout_step_renders(self):
+        hold = self.make("DG-RND-0001", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        client = _login("user_flow")
+        free = timezone.localdate() + timedelta(days=20)
+        for url in (f"/booking/{self.car.pk}/?" + "&".join(f"{k}={v}" for k, v in self.dates(free, 2).items()),
+                    f"/verification/{hold.booking_id}/", f"/delivery/{hold.booking_id}/",
+                    f"/summary/{hold.booking_id}/", f"/payment/{hold.booking_id}/"):
+            with self.subTest(url=url):
+                self.assertEqual(client.get(url).status_code, 200)
+
+    def test_confirmation_and_my_bookings_render(self):
+        paid = self.make("DG-RND-0002", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        hold = self.make("DG-RND-0003", days_from_now=30, status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
+        client = _login("user_flow")
+        self.assertContains(client.get(f"/confirmation/{paid.booking_id}/"), "verifying documents")
+        html = client.get("/my-bookings/").content.decode()
+        self.assertIn("Continue booking", html)
+        self.assertIn(f'href="/verification/{hold.booking_id}/"', html)
+        for page in ("/", "/cars/", f"/cars/{self.car.pk}/"):
+            with self.subTest(page=page):
+                self.assertEqual(Client().get(page).status_code, 200)
+
+
+class ClerkCallbackSecurityTests(TestCase):
+    def setUp(self):
+        Customer.objects.create(clerk_user_id="user_victim_admin", email="boss@example.com", role="ADMIN")
+
+    def post(self, payload):
+        return Client().post("/auth/clerk-callback/", data=json.dumps(payload), content_type="application/json")
+
+    def test_bare_user_id_is_not_trusted(self):
+        with patch("rental.views.verify_clerk_user", return_value={"clerk_user_id": "user_victim_admin", "email": "boss@example.com"}):
+            response = self.post({"clerk_user_id": "user_victim_admin"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_verified_session_token_signs_in(self):
+        with patch("rental.views.verify_clerk_session_token", return_value="user_new") as verify, \
+                patch("rental.views.verify_clerk_user", return_value={"clerk_user_id": "user_new", "email": "n@example.com", "full_name": "New"}):
+            client = Client()
+            response = client.post("/auth/clerk-callback/", data=json.dumps({"session_token": "tok", "next": "/cars/"}),
+                                   content_type="application/json")
+        verify.assert_called_once()
+        self.assertEqual(response.json(), {"ok": True, "redirect": "/cars/"})
+        self.assertEqual(client.session["clerk_user_id"], "user_new")
+
+    def test_invalid_token_rejected(self):
+        with override_settings(CLERK_SECRET_KEY="sk_test"), patch("rental.utils._clerk_signing_key", return_value=None):
+            self.assertEqual(self.post({"session_token": "not-a-jwt"}).status_code, 401)
+
+
+class AdminConsoleTests(FlowFixtureMixin, TestCase):
+    def admin_client(self):
+        client = _login("user_flow_admin")
+        return client
+
+    def test_all_admin_pages_render(self):
+        b = self.make("DG-ADC-0001", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        CarBlock.objects.create(car=self.car, start_datetime=self.now + timedelta(days=40), end_datetime=self.now + timedelta(days=41))
+        client = self.admin_client()
+        pages = ["/dashboard/", "/dashboard/verifications/", "/dashboard/customers/?q=flow", "/dashboard/cars/",
+                 "/dashboard/locations/", "/dashboard/blocks/", f"/dashboard/bookings/{b.booking_id}/"]
+        pages += [f"/dashboard/bookings/?status={key}" for key in ("active", "verification", "confirmed", "on_trip", "completed", "cancelled", "all")]
+        for url in pages:
+            with self.subTest(url=url):
+                self.assertEqual(client.get(url).status_code, 200)
+        self.assertContains(client.get("/dashboard/bookings/?status=all&q=Flow User"), b.booking_id)
+
+    def test_actions_redirect_back_to_referring_page(self):
+        b = self.make("DG-ADC-0002", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        response = self.admin_client().post(f"/dashboard/bookings/{b.booking_id}/docs/approve/",
+                                     HTTP_REFERER=f"http://testserver/dashboard/bookings/{b.booking_id}/")
+        self.assertEqual(response["Location"], f"http://testserver/dashboard/bookings/{b.booking_id}/")
+
+    def test_approve_refuses_when_a_document_is_missing(self):
+        b = self.make("DG-ADC-0003", status=Booking.Status.PENDING_VERIFICATION)
+        Document.objects.create(booking=b, document_type=Document.DocType.DRIVING_LICENSE, file="")
+        self.admin_client().post(f"/dashboard/bookings/{b.booking_id}/docs/approve/")
+        b.refresh_from_db()
+        self.assertEqual(b.status, Booking.Status.PENDING_VERIFICATION)
+        self.assertFalse(b.documents.filter(verification_status=Document.VerificationStatus.VERIFIED).exists())
+
+    def test_approving_docs_does_not_revert_active_trip(self):
+        b = self.make("DG-ADC-0004", days_from_now=-1, status=Booking.Status.ACTIVE, docs=True)
+        self.admin_client().post(f"/dashboard/bookings/{b.booking_id}/docs/approve/")
+        b.refresh_from_db()
+        self.assertEqual(b.status, Booking.Status.ACTIVE)
+
+    def test_edit_car_and_duplicate_registration(self):
+        other = Car.objects.create(location=self.loc, brand="Tata", model="Nexon", registration_number="WB06F0002")
+        client = self.admin_client()
+        fields = {"brand": "Honda", "model": "City ZX", "registration_number": "wb06f0001", "location": self.loc.pk,
+                  "category": "Sedan", "seats": 5, "transmission": "Manual", "fuel_type": "Petrol",
+                  "price_per_day": 2400, "status": "AVAILABLE"}
+        client.post(f"/dashboard/cars/{self.car.pk}/edit/", fields)
+        self.car.refresh_from_db()
+        self.assertEqual((self.car.model, self.car.price_per_day, self.car.transmission), ("City ZX", 2400, "Manual"))
+        response = client.post(f"/dashboard/cars/{other.pk}/edit/", {**fields, "registration_number": "WB06F0001"})
+        self.assertEqual(response.status_code, 302)
+        other.refresh_from_db()
+        self.assertEqual(other.registration_number, "WB06F0002")
+        response = client.post("/dashboard/cars/add/", {**fields, "registration_number": "WB06F0001"})
+        self.assertEqual(response.status_code, 302)
+        response = client.post("/dashboard/cars/add/", {**fields, "registration_number": "WB06F0099", "category": "Spaceship"})
+        self.assertFalse(Car.objects.filter(registration_number="WB06F0099").exists())
+
+    def test_toggle_location_and_delete_block(self):
+        client = self.admin_client()
+        client.post(f"/dashboard/locations/{self.loc.pk}/toggle/")
+        self.loc.refresh_from_db()
+        self.assertFalse(self.loc.is_active)
+        block = CarBlock.objects.create(car=self.car, start_datetime=self.now, end_datetime=self.now + timedelta(days=1))
+        client.post(f"/dashboard/blocks/{block.pk}/delete/")
+        self.assertFalse(CarBlock.objects.filter(pk=block.pk).exists())
+
+    def test_admin_document_view_requires_admin(self):
+        b = self.make("DG-ADC-0005", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        doc = b.documents.first()
+        Document.objects.filter(pk=doc.pk).update(file_reference="documents/DG-ADC-0005/GOVT_ID_scan.pdf")
+        self.assertEqual(_login("user_flow").get(f"/dashboard/documents/{doc.pk}/").status_code, 302)
+        with patch("rental.views.fetch_document_bytes", return_value=b"%PDF-1.7 test"):
+            response = self.admin_client().get(f"/dashboard/documents/{doc.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"%PDF-1.7 test")
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertTrue(response["Content-Disposition"].startswith("inline"))
+        # The admin modal frames this response; DENY makes Chrome show "Failed to load PDF document".
+        self.assertEqual(response["X-Frame-Options"], "SAMEORIGIN")
+
+    def test_admin_document_falls_back_to_local_copy_when_remote_is_empty(self):
+        from django.core.files.base import ContentFile
+
+        b = self.make("DG-ADC-0006", status=Booking.Status.PENDING_VERIFICATION)
+        with self.settings(MEDIA_ROOT=self._tmp_media()):
+            doc = Document(booking=b, document_type=Document.DocType.GOVT_ID, file_reference="documents/x/GOVT_ID_id.png")
+            doc.file.save("id.png", ContentFile(b"PNGBYTES"), save=True)
+            with patch("rental.views.fetch_document_bytes", return_value=b""):
+                response = self.admin_client().get(f"/dashboard/documents/{doc.pk}/")
+        self.assertEqual(response.content, b"PNGBYTES")
+        self.assertEqual(response["Content-Type"], "image/png")
+
+    def test_admin_document_never_serves_html_inline(self):
+        b = self.make("DG-ADC-0007", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        doc = b.documents.first()
+        Document.objects.filter(pk=doc.pk).update(file_reference="documents/x/evil.html")
+        with patch("rental.views.fetch_document_bytes", return_value=b"<script>alert(1)</script>"):
+            response = self.admin_client().get(f"/dashboard/documents/{doc.pk}/")
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertTrue(response["Content-Disposition"].startswith("attachment"))
+
+    def test_admin_document_missing_file_explains_itself(self):
+        b = self.make("DG-ADC-0008", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        response = self.admin_client().get(f"/dashboard/documents/{b.documents.first().pk}/")
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, "missing or empty", status_code=404)
+
+    def _tmp_media(self):
+        import shutil
+        import tempfile
+
+        path = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, path, ignore_errors=True)
+        return path
+
+
+class TemplateFilterTests(TestCase):
+    def test_indian_number_grouping(self):
+        from .templatetags.rental_tags import inr
+
+        self.assertEqual(inr(1234567), "12,34,567")
+        self.assertEqual(inr("9204.00"), "9,204")
+        self.assertEqual(inr(999), "999")
+
+
+class PublicPagesTests(TestCase):
+    def setUp(self):
+        loc = Location.objects.create(name="Hero", address="Addr", city="Kolkata")
+        Car.objects.create(location=loc, category="SUV", brand="Kia", model="Seltos", registration_number="WB06P0001",
+                           price_per_day=2500, image_url="https://example.com/seltos.jpg")
+
+    def test_mobile_menu_and_hero_render(self):
+        body = Client().get("/").content.decode()
+        self.assertIn('id="navToggle"', body)
+        self.assertIn('aria-controls="navMenu"', body)
+        self.assertIn('class="hx"', body)
+        self.assertIn("Kia Seltos", body)
+        self.assertIn('name="pickup_date"', body)
+
+    def test_cars_page_filters_keep_dates_and_search_keeps_filters(self):
+        start = timezone.localdate() + timedelta(days=5)
+        body = Client().get("/cars/", {"category": "SUV", "pickup_date": start.isoformat(), "drop_date": (start + timedelta(days=2)).isoformat()}).content.decode()
+        self.assertIn(f'name="pickup_date" value="{start.isoformat()}"', body)
+        self.assertIn('<input type="hidden" name="category" value="SUV" />', body)
+        self.assertIn("cl-dot", body)
+        self.assertIn("5,900 total", body)
+
+
+@override_settings(CLERK_PUBLISHABLE_KEY="pk_test_example")
+class AuthPageTests(TestCase):
+    def test_login_loads_clerk_once_and_points_clerk_at_our_pages(self):
+        body = Client().get("/login/", {"next": "/booking/3/"}).content.decode()
+        self.assertEqual(body.count("clerk.browser.js"), 1)
+        self.assertIn('data-login-url="/login/"', body)
+        self.assertIn('data-signup-url="/signup/"', body)
+        self.assertIn('data-next="/booking/3/"', body)
+        self.assertIn("your dates are saved", body)
+        self.assertIn("data-auth-page", body)
+
+    def test_signup_redirects_signed_in_customer(self):
+        Customer.objects.create(clerk_user_id="user_signed_in", email="s@example.com")
+        response = _login("user_signed_in").get("/signup/", {"next": "/cars/"})
+        self.assertRedirects(response, "/cars/", fetch_redirect_response=False)
+
+    def test_login_sends_signed_in_admin_to_dashboard(self):
+        Customer.objects.create(clerk_user_id="user_boss", email="b@example.com", role="ADMIN")
+        response = _login("user_boss").get("/login/")
+        self.assertRedirects(response, "/dashboard/", fetch_redirect_response=False)
+
+    def test_logged_out_page_does_not_auto_sync(self):
+        body = Client().get("/logout/").content.decode()
+        self.assertIn("data-auth-page", body)
+        self.assertEqual(body.count("clerk.browser.js"), 1)
+
+
+class SeedFleetCommandTests(TestCase):
+    def setUp(self):
+        from .fleet_data import FLEET
+
+        self.fleet_size = len(FLEET)
+        self.loc_a = Location.objects.create(name="Seed A", address="A", city="Kolkata")
+        self.loc_b = Location.objects.create(name="Seed B", address="B", city="Kolkata")
+        self.booked = Car.objects.create(location=self.loc_a, brand="Temp", model="Booked", registration_number="TMP0001")
+        self.unbooked = Car.objects.create(location=self.loc_a, brand="Temp", model="Unused", registration_number="TMP0002")
+        user = Customer.objects.create(clerk_user_id="user_seed", email="seed@example.com")
+        Booking.objects.create(
+            booking_id="DG-SEED-0001", user=user, car=self.booked, pickup_location=self.loc_a,
+            pickup_datetime=timezone.now() + timedelta(days=1), dropoff_datetime=timezone.now() + timedelta(days=2),
+            status=Booking.Status.CONFIRMED, payment_status=Booking.PaymentStatus.PAID,
+        )
+
+    def run_command(self, *args):
+        import io
+
+        from django.core.management import call_command
+
+        out = io.StringIO()
+        call_command("seed_fleet", *args, stdout=out)
+        return out.getvalue()
+
+    def test_dry_run_changes_nothing(self):
+        output = self.run_command("--seed", "1")
+        self.assertIn("Dry run only", output)
+        self.assertEqual(Car.objects.count(), 2)
+
+    def test_apply_hides_booked_cars_and_is_repeatable(self):
+        self.run_command("--apply", "--seed", "1")
+        self.booked.refresh_from_db()
+        self.assertEqual(self.booked.status, "INACTIVE")
+        self.assertFalse(Car.objects.filter(pk=self.unbooked.pk).exists())
+        self.assertTrue(Booking.objects.filter(booking_id="DG-SEED-0001").exists())
+        new_cars = Car.objects.exclude(pk=self.booked.pk)
+        self.assertEqual(new_cars.count(), self.fleet_size)
+        self.assertFalse(new_cars.filter(image_url="").exists())
+        per_location = [new_cars.filter(location=loc).count() for loc in (self.loc_a, self.loc_b)]
+        self.assertLessEqual(abs(per_location[0] - per_location[1]), 1)
+        self.run_command("--apply")
+        self.assertEqual(Car.objects.exclude(pk=self.booked.pk).count(), self.fleet_size)
+
+    def test_purge_removes_old_cars_with_bookings(self):
+        output = self.run_command("--apply", "--old", "purge")
+        self.assertIn("OPEN PAID booking DG-SEED-0001", output)
+        self.assertFalse(Car.objects.filter(pk=self.booked.pk).exists())
+        self.assertFalse(Booking.objects.filter(booking_id="DG-SEED-0001").exists())
+
+
+class AdminRoleManagementTests(TestCase):
+    def setUp(self):
+        self.admin = Customer.objects.create(clerk_user_id="user_role_admin", email="boss@example.com", role="ADMIN")
+        self.member = Customer.objects.create(clerk_user_id="user_role_member", email="member@example.com")
+
+    def test_admin_can_promote_and_demote_from_dashboard(self):
+        client = _login("user_role_admin")
+        self.assertContains(client.get("/dashboard/customers/"), "Make admin")
+        client.post(f"/dashboard/customers/{self.member.pk}/role/", {"role": "ADMIN"})
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.role, "ADMIN")
+        self.assertEqual(_login("user_role_member").get("/dashboard/").status_code, 200)
+        client.post(f"/dashboard/customers/{self.member.pk}/role/", {"role": "CUSTOMER"})
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.role, "CUSTOMER")
+
+    def test_customer_cannot_change_roles(self):
+        _login("user_role_member").post(f"/dashboard/customers/{self.member.pk}/role/", {"role": "ADMIN"})
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.role, "CUSTOMER")
+
+    def test_admin_cannot_demote_self_or_last_admin(self):
+        _login("user_role_admin").post(f"/dashboard/customers/{self.admin.pk}/role/", {"role": "CUSTOMER"})
+        self.admin.refresh_from_db()
+        self.assertEqual(self.admin.role, "ADMIN")
+
+    @override_settings(SUPABASE_URL="https://example.supabase.co", SUPABASE_KEY="service-key")
+    def test_role_change_is_written_to_supabase(self):
+        with patch("rental.utils.requests.get") as get, patch("rental.utils.requests.post") as post:
+            get.return_value.status_code = 200
+            get.return_value.json.return_value = [{"role": "ADMIN"}]
+            post.return_value.status_code = 201
+            _login("user_role_admin").post(f"/dashboard/customers/{self.member.pk}/role/", {"role": "ADMIN"})
+        self.assertEqual(post.call_args.kwargs["json"], {"clerk_user_id": "user_role_member", "role": "ADMIN"})
+        self.assertIn("merge-duplicates", post.call_args.kwargs["headers"]["Prefer"])

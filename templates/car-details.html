@@ -1,53 +1,95 @@
 {% extends "base.html" %}
+{% load static rental_tags %}
 {% block page %}details{% endblock %}
 {% block title %}DriveGo - {{ car.brand }} {{ car.model }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/flow.css' %}" />{% endblock %}
 {% block content %}
-<section class="section page-head">
-  <div class="detail-bar">
-    <a href="{% url 'cars' %}" class="small"><svg class="ic" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>Back to results</a>
-    <span class="eyebrow">CAR DETAILS</span>
-  </div>
-  <h2>{{ car.brand }} {{ car.model }}</h2>
-  <p class="muted">{{ car.location.name }} · {{ car.seats }} Seats · {{ car.transmission }} · {{ car.fuel_type }}</p>
-</section>
+<div class="cd">
+  <nav class="cd-crumbs" aria-label="Breadcrumb">
+    <a href="{% url 'cars' %}?{{ request.GET.urlencode }}"><svg class="ic" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>All cars</a>
+    <span>/</span><span>{{ car.location.name }}</span><span>/</span><b>{{ car.brand }} {{ car.model }}</b>
+  </nav>
 
-<div class="detail-layout">
-  <div>
-    <img class="main" src="{{ car.display_image }}" alt="{{ car.brand }} {{ car.model }}" />
-    <div class="panel info-panel">
-      <h3>Features</h3>
-      <div class="specs">{% for feat in car.feature_list %}<span>{{ feat }}</span>{% endfor %}</div>
-      <h3 style="margin-top:12px">Rental policy</h3>
-      <p class="small muted">Valid driving license required · Fuel on return basis · 200 km/day included.</p>
-      <h3 style="margin-top:12px">Cancellation</h3>
-      <p class="small muted">Free cancellation up to 24 hrs before pickup.</p>
-      <h3 style="margin-top:12px">Location</h3>
-      <p class="small muted"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> {{ car.location.address }}, {{ car.location.city }}</p>
+  <div class="cd-grid">
+    <div class="cd-intro">
+      <div class="cd-hero">
+        <img src="{{ car.display_image }}" alt="{{ car.brand }} {{ car.model }}" />
+        <span class="cd-chip">{{ car.category }}</span>
+      </div>
+
+      <header class="cd-title">
+        <div>
+          <h1>{{ car.brand }} {{ car.model }}</h1>
+          <p><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>{{ car.location.name }}, {{ car.location.city }}</p>
+        </div>
+        <div class="cd-rate"><b>₹{{ car.price_per_day|inr }}</b><span>/day</span></div>
+      </header>
+
+      <ul class="cd-specs">
+        <li><svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><small>Seats</small><b>{{ car.seats }}</b></li>
+        <li><svg class="ic" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg><small>Gearbox</small><b>{{ car.transmission }}</b></li>
+        <li><svg class="ic" viewBox="0 0 24 24"><line x1="3" x2="15" y1="22" y2="22"/><line x1="4" x2="14" y1="9" y2="9"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9.83a2 2 0 0 0-.59-1.42L18 5"/></svg><small>Fuel</small><b>{{ car.fuel_type }}</b></li>
+        <li><svg class="ic" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg><small>Type</small><b>{{ car.category }}</b></li>
+      </ul>
     </div>
-  </div>
 
-  <aside class="panel book-widget">
-    <div class="price"><b style="font-size:1.5rem">₹{{ car.price_per_day }}</b><span class="muted">/day</span></div>
-    <div class="book-status">{% if available %}<span class="badge ok">Available</span>{% else %}<span class="badge no">Booked</span>{% endif %}</div>
-    <form action="{% url 'booking_dates' car.id %}" method="get">
-      <div class="field"><label>Pickup location</label><div class="pickup-fixed"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> {{ car.location.name }}</div></div>
-      <div class="form-row">
-        <div class="field"><label>Pickup date</label><input name="pickup_date" type="date" value="{{ request.GET.pickup_date|default:default_pickup_date }}" /></div>
-        <div class="field"><label>Time</label><input name="pickup_time" type="time" value="{{ request.GET.pickup_time|default:'10:00' }}" /></div>
-      </div>
-      <div class="form-row">
-        <div class="field"><label>Drop date</label><input name="drop_date" type="date" value="{{ request.GET.drop_date|default:default_drop_date }}" /></div>
-        <div class="field"><label>Time</label><input name="drop_time" type="time" value="{{ request.GET.drop_time|default:'18:00' }}" /></div>
-      </div>
-      <div class="book-avail">{% if not dated %}<span class="badge info">Select dates to check live availability</span>{% elif available %}<span class="badge ok">✓ Available for your selected dates</span>{% elif booked_slot %}<span class="badge no">Booked {{ booked_slot.from|date:"d M, h:i A" }} – {{ booked_slot.to|date:"d M, h:i A" }}{% if next_free %} · Free from {{ next_free|date:"d M, h:i A" }}{% endif %}</span>{% else %}<span class="badge no">Currently unavailable</span>{% endif %}</div>
-      <button class="btn btn-primary btn-block" type="submit"{% if not available %} disabled{% endif %}>Continue Booking</button>
-      <a class="btn btn-ghost btn-block btn-alt" href="{% url 'cars' %}">See alternatives</a>
-    </form>
-    <ul class="trust-mini">
-      <li><svg class="ic" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Verified car · fully insured</li>
-      <li><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Free cancellation up to 24 hrs before pickup</li>
-      <li><svg class="ic" viewBox="0 0 24 24"><path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 0 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/></svg>24/7 roadside assistance included</li>
-    </ul>
-  </aside>
+    <div class="cd-more">
+      <section class="cd-section" id="availability">
+        <div class="cd-section-head">
+          <h2>Availability</h2>
+          <p>Live calendar for the next six weeks. A booked car is still open on every other date.</p>
+        </div>
+        {% include "partials/availability_calendar.html" %}
+      </section>
+
+      {% if car.feature_list %}
+      <section class="cd-section">
+        <div class="cd-section-head"><h2>Features</h2></div>
+        <ul class="cd-features">{% for feat in car.feature_list %}<li><svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>{{ feat }}</li>{% endfor %}</ul>
+      </section>
+      {% endif %}
+
+      <section class="cd-section">
+        <div class="cd-section-head"><h2>Good to know</h2></div>
+        <div class="cd-policies">
+          <div><b>Documents</b><p>Valid driving license and a government ID, uploaded during booking.</p></div>
+          <div><b>Fuel &amp; distance</b><p>Return with the same fuel level. 200 km/day included.</p></div>
+          <div><b>Cancellation</b><p>Cancel any time before pickup for a full refund.</p></div>
+          <div><b>Pickup point</b><p>{{ car.location.address }}, {{ car.location.city }}{% if car.location.phone %} · {{ car.location.phone }}{% endif %}</p></div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="cd-side" id="book">
+      <form class="book-box" action="{% url 'booking_dates' car.id %}" method="get" data-availability="{% url 'car_availability' car.id %}">
+        <div class="book-box-head">
+          <div><b>₹{{ car.price_per_day|inr }}</b><span>/day</span></div>
+          <span class="pill tone-{{ car.status|tone }}">{% if car.status == 'AVAILABLE' %}In service{% else %}{{ car.get_status_display }}{% endif %}</span>
+        </div>
+
+        {% include "partials/availability_panel.html" %}
+
+        <dl class="book-estimate" data-av-estimate{% if not info.available and info.reason != 'booked' %} hidden{% endif %}>
+          <div><dt>₹{{ car.price_per_day|inr }} × <span data-price="days">{{ estimate.days }}</span> day(s)</dt><dd data-price="rental_amount">₹{{ estimate.rental_amount|inr }}</dd></div>
+          <div><dt>Taxes ({{ TAX_PERCENT }}%)</dt><dd data-price="tax_amount">₹{{ estimate.tax_amount|inr }}</dd></div>
+          <div class="total"><dt>Estimated total</dt><dd data-price="total_amount">₹{{ estimate.total_amount|inr }}</dd></div>
+        </dl>
+
+        <button class="btn btn-primary btn-block" type="submit" data-av-submit{% if not info.available %} disabled{% endif %}>
+          <span data-av-cta>{% if info.available %}Book for these dates{% elif info.reason == 'booked' %}Pick other dates to book{% else %}Unavailable{% endif %}</span>
+        </button>
+        <button class="btn btn-ghost btn-block av-nojs" type="submit" formaction="{% url 'car_detail' car.id %}">Check availability</button>
+        <p class="book-note">You won't be charged yet. {% if not current_customer %}You'll sign in before booking.{% endif %}</p>
+      </form>
+    </aside>
+  </div>
+</div>
+
+<div class="cd-mbar" data-mbar>
+  <div>
+    <b>₹{{ car.price_per_day|inr }}<small>/day</small></b>
+    <span data-mbar-status class="{% if info.available %}is-ok{% else %}is-no{% endif %}">{% if info.available %}Free for your dates{% elif info.reason == 'booked' %}Booked — pick other dates{% else %}{{ info.message }}{% endif %}</span>
+  </div>
+  <a class="btn btn-primary" href="#book">{% if info.available %}Book now{% else %}Check dates{% endif %}</a>
 </div>
 {% endblock %}

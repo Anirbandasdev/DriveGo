@@ -1,0 +1,102 @@
+{% extends "admin_base.html" %}
+{% load rental_tags %}
+{% block admin_title %}DriveGo - {{ booking.booking_id }}{% endblock %}
+{% block admin_content %}
+<a class="adm-back" href="{% url 'admin_bookings' %}"><svg class="ic" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>All bookings</a>
+<header class="adm-head">
+  <div>
+    <h1>{{ booking.booking_id }} <span class="pill tone-{{ booking.status|tone }}">{{ booking.get_status_display }}</span></h1>
+    <p>Created {{ booking.created_at|date:"d M Y, h:i A" }} · {{ booking.user }}</p>
+  </div>
+  <div class="adm-head-actions">
+    {% if booking.status == 'CONFIRMED' %}
+    <form action="{% url 'admin_trip_action' booking.booking_id 'start' %}" method="post">{% csrf_token %}<button class="btn btn-primary btn-sm" type="submit">Start trip</button></form>
+    {% endif %}
+    {% if booking.status == 'CONFIRMED' or booking.status == 'ACTIVE' %}
+    <form action="{% url 'admin_trip_action' booking.booking_id 'complete' %}" method="post">{% csrf_token %}<button class="btn btn-ghost btn-sm" type="submit">Mark completed</button></form>
+    {% endif %}
+    {% if not booking.is_closed %}
+    <form action="{% url 'admin_cancel_booking' booking.booking_id %}" method="post">{% csrf_token %}<button class="btn btn-danger btn-sm" type="submit" data-confirm="Cancel {{ booking.booking_id }}?{% if booking.is_paid %} ₹{{ booking.total_amount|inr }} will be refunded to the customer.{% endif %}">Cancel{% if booking.is_paid %} &amp; refund{% endif %}</button></form>
+    {% endif %}
+  </div>
+</header>
+
+{% if clashes or blocks %}
+<div class="co-alert is-error">
+  <div><b>Scheduling conflict.</b>
+    {% for c in clashes %}Overlaps {{ c.booking_id }} ({{ c.user }}, {{ c.get_status_display|lower }}). {% endfor %}
+    {% for blk in blocks %}Car is blocked {{ blk.start_datetime|date:"d M H:i" }} → {{ blk.end_datetime|date:"d M H:i" }}{% if blk.note %} ({{ blk.note }}){% endif %}. {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% if booking.hold_expired %}<div class="co-alert is-info"><div>This unpaid hold expired {{ booking.hold_expires_at|timesince }} ago and no longer blocks the car.</div></div>{% endif %}
+
+<div class="adm-grid-2 is-wide-left">
+  <div class="adm-stack">
+    <section class="adm-card">
+      <div class="adm-card-head"><h2>Trip</h2></div>
+      <div class="detail-car">
+        <img src="{{ booking.car.display_image }}" alt="" />
+        <div>
+          <b>{{ booking.car }}</b>
+          <span>{{ booking.car.registration_number }} · {{ booking.car.category }} · {{ booking.car.transmission }}</span>
+          <span>Home location: {{ booking.car.location.name }}</span>
+        </div>
+      </div>
+      <dl class="facts">
+        <div><dt>Pickup</dt><dd>{{ booking.pickup_datetime|date:"D d M Y, h:i A" }}</dd></div>
+        <div><dt>Return</dt><dd>{{ booking.dropoff_datetime|date:"D d M Y, h:i A" }}</dd></div>
+        <div><dt>Length</dt><dd>{{ booking.rental_days }} day{{ booking.rental_days|pluralize }}</dd></div>
+        <div><dt>Handover</dt><dd>{% if booking.delivery_method == 'HOME_DELIVERY' %}Home delivery — {{ booking.delivery_address }}, {{ booking.delivery_city }} {{ booking.delivery_pincode }}{% if booking.delivery_instructions %}<small>“{{ booking.delivery_instructions }}”</small>{% endif %}{% else %}Store pickup at {{ booking.pickup_location.name }}{% endif %}</dd></div>
+      </dl>
+    </section>
+
+    <section class="adm-card">
+      <div class="adm-card-head"><h2>Documents</h2>{% if booking.documents_verified %}<span class="pill tone-ok">All verified</span>{% endif %}</div>
+      {% with b=booking %}{% include "partials/admin_doc_review.html" %}{% endwith %}
+      {% for row in doc_rows %}{% if not row.doc %}<p class="muted-note">Missing: {{ row.label }}</p>{% endif %}{% endfor %}
+    </section>
+
+    <section class="adm-card">
+      <div class="adm-card-head"><h2>Message to customer</h2></div>
+      <form class="adm-note" action="{% url 'admin_set_note' booking.booking_id %}" method="post">{% csrf_token %}
+        <textarea name="note" rows="3" placeholder="Shown to the customer on their booking page">{{ booking.admin_note }}</textarea>
+        <button class="btn btn-ghost btn-sm" type="submit">Save note</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="adm-stack">
+    <section class="adm-card">
+      <div class="adm-card-head"><h2>Payment</h2><span class="pill tone-{{ booking.payment_status|tone }}">{{ booking.get_payment_status_display }}</span></div>
+      <dl class="facts is-money">
+        <div><dt>Rental</dt><dd>₹{{ booking.rental_amount|inr }}</dd></div>
+        <div><dt>Delivery</dt><dd>₹{{ booking.delivery_charge|inr }}</dd></div>
+        <div><dt>Tax</dt><dd>₹{{ booking.tax_amount|inr }}</dd></div>
+        <div class="total"><dt>Total</dt><dd>₹{{ booking.total_amount|inr }}</dd></div>
+      </dl>
+      <dl class="facts is-compact">
+        <div><dt>Method</dt><dd>{{ booking.payment_method|upper|default:"—" }}</dd></div>
+        <div><dt>Order</dt><dd class="mono">{{ booking.razorpay_order_id|default:"—" }}</dd></div>
+        <div><dt>Payment</dt><dd class="mono">{{ booking.razorpay_payment_id|default:"—" }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="adm-card">
+      <div class="adm-card-head"><h2>Customer</h2><a href="{% url 'admin_customers' %}?q={{ booking.user.email|urlencode }}">Profile</a></div>
+      <dl class="facts is-compact">
+        <div><dt>Name</dt><dd>{{ booking.user.full_name|default:"—" }}</dd></div>
+        <div><dt>Email</dt><dd>{% if booking.user.email %}<a href="mailto:{{ booking.user.email }}">{{ booking.user.email }}</a>{% else %}—{% endif %}</dd></div>
+        <div><dt>Phone</dt><dd>{{ booking.user.phone|default:"—" }}</dd></div>
+      </dl>
+      {% if other_bookings %}
+      <h3 class="mini-head">Other bookings</h3>
+      <ul class="mini-list">
+        {% for o in other_bookings %}<li><a href="{% url 'admin_booking_detail' o.booking_id %}">{{ o.booking_id }}</a><span>{{ o.car }}</span><span class="pill tone-{{ o.status|tone }}">{{ o.get_status_display }}</span></li>{% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% include "partials/doc_modal.html" %}
+{% endblock %}

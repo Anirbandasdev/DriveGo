@@ -1,31 +1,62 @@
 {% extends "admin_base.html" %}
 {% block admin_title %}DriveGo - Admin Block Dates{% endblock %}
 {% block admin_content %}
-<div class="section">
-  <span class="eyebrow">CONTROL CENTER</span>
-  <h2>Block Dates</h2>
-  <p class="small muted">Temporarily take a car off the calendar (maintenance, owner use). Bookings can't be made during blocked periods.</p>
-</div>
+<header class="adm-head">
+  <div>
+    <h1>Blocked dates</h1>
+    <p>Take a car off the calendar for servicing or private use. Customers can still book it outside these periods.</p>
+  </div>
+</header>
 
-<div class="panel">
-  <h3>Add Block</h3>
-  <form action="{% url 'admin_block_dates' %}" method="post" class="admin-form">{% csrf_token %}
-    <label class="field"><span>Car</span>
-      <select name="car_id" required>{% for car in all_cars %}<option value="{{ car.pk }}">{{ car }}</option>{% endfor %}</select>
-    </label>
-    <label class="field"><span>From</span><input type="datetime-local" name="start_datetime" required /></label>
-    <label class="field"><span>Until</span><input type="datetime-local" name="end_datetime" required /></label>
-    <label class="field"><span>Note</span><input type="text" name="note" /></label>
-    <button class="btn btn-primary" type="submit">Block</button>
-  </form>
-</div>
+<div class="adm-grid-2 is-wide-left">
+  <section class="adm-card is-flush">
+    <div class="adm-card-head is-padded"><h2>Current &amp; upcoming blocks</h2><span class="pill tone-neutral">{{ current_blocks|length }}</span></div>
+    <div class="table-scroll">
+      <table class="adm-table">
+        <thead><tr><th>Car</th><th>From</th><th>Until</th><th>Note</th><th><span class="sr-only">Remove</span></th></tr></thead>
+        <tbody>
+        {% for blk in current_blocks %}
+        <tr>
+          <td>{{ blk.car }}<small>{{ blk.car.registration_number }} · {{ blk.car.location.name }}</small></td>
+          <td>{{ blk.start_datetime|date:"d M Y, H:i" }}{% if blk.start_datetime <= now %}<small><span class="pill tone-warn">In effect</span></small>{% endif %}</td>
+          <td>{{ blk.end_datetime|date:"d M Y, H:i" }}</td>
+          <td>{{ blk.note|default:"—" }}</td>
+          <td class="actions">
+            <form action="{% url 'admin_delete_block' blk.pk %}" method="post">{% csrf_token %}
+              <button class="btn btn-sm btn-danger" type="submit" data-confirm="Remove this block? {{ blk.car }} becomes bookable for that period.">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty">No active blocks — every car is bookable.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if recent_blocks %}
+    <details class="past-blocks">
+      <summary>Past blocks ({{ recent_blocks|length }})</summary>
+      <ul class="mini-list">
+        {% for blk in recent_blocks %}<li><span>{{ blk.car }}</span><span>{{ blk.start_datetime|date:"d M" }} → {{ blk.end_datetime|date:"d M Y" }}</span><span>{{ blk.note }}</span></li>{% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </section>
 
-<div class="panel">
-  <h3>Recent Blocks</h3>
-  {% for blk in recent_blocks %}
-  <div class="kv"><span>{{ blk.car }}</span><span class="small muted">{{ blk.start_datetime|date:"d M, H:i" }} → {{ blk.end_datetime|date:"d M, H:i" }}{% if blk.note %} · {{ blk.note }}{% endif %}</span></div>
-  {% empty %}
-  <p class="small muted">No blocked dates yet.</p>
-  {% endfor %}
+  <section class="adm-card">
+    <div class="adm-card-head"><h2>Add a block</h2></div>
+    <form action="{% url 'admin_block_dates' %}" method="post">{% csrf_token %}
+      <div class="form-grid is-single">
+        <label class="av-field"><span>Car</span>
+          <select name="car_id" required>{% for car in all_cars %}<option value="{{ car.pk }}">{{ car }} — {{ car.registration_number }}</option>{% endfor %}</select>
+        </label>
+        <label class="av-field"><span>From</span><input type="datetime-local" name="start_datetime" required /></label>
+        <label class="av-field"><span>Until</span><input type="datetime-local" name="end_datetime" required /></label>
+        <label class="av-field"><span>Note <small>(optional)</small></span><input type="text" name="note" maxlength="255" placeholder="e.g. Annual service" /></label>
+      </div>
+      <p class="muted-note">Existing bookings in this period are not cancelled — you'll get a warning if there's an overlap.</p>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Block dates</button></div>
+    </form>
+  </section>
 </div>
 {% endblock %}

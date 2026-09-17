@@ -1,68 +1,9 @@
-{% extends "base.html" %}
-{% block title %}DriveGo - Sign Up{% endblock %}
-{% block content %}
-<div class="auth-wrap">
-  <aside class="auth-side">
-    <div class="logo">DriveGo<span class="logo-dot">.</span></div>
-    <h2>Rent. Drive. Repeat.</h2>
-    <p>Create an account to book in seconds and track every trip.</p>
-    <ul>
-      <li><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>5 locations across Kolkata</li>
-      <li><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Verified, insured cars</li>
-      <li><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Free cancellation up to 24 hrs</li>
-    </ul>
-  </aside>
-  <div class="form-card auth-form">
-    <h2>Create Account</h2>
-    <p class="muted small">Sign up in seconds to start booking.</p>
-    <div id="clerkBox" style="margin-top:16px">
-      <div class="clerk-loading"><span class="spinner"></span>Loading secure sign-up…</div>
-    </div>
-    {% if not clerk_key %}
-    <p class="small muted" style="margin-top:12px;text-align:center">Authentication isn't configured yet. Add Clerk keys in <code>.env</code> to enable sign-up.</p>
-    {% endif %}
-  </div>
-</div>
-{% endblock %}
-{% block scripts %}
-{% if clerk_key %}<script async crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_key }}" src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js" onload="initClerk(true)"></script>{% endif %}
-<script>
-function getCookie(name) {
-  var value = '; ' + document.cookie;
-  var parts = value.split('; ' + name + '=');
-  if (parts.length === 2) return parts.pop().split(';').shift();
-}
-function initClerk(isSignup) {
-  var box = document.getElementById('clerkBox');
-  if (!window.Clerk) {
-    var configured = {% if clerk_key %}true{% else %}false{% endif %};
-    box.innerHTML = configured
-      ? '<div class="clerk-loading">Sign-up failed to load. <a href="" onclick="location.reload();return false;"><b>&nbsp;Refresh to retry</b></a></div>'
-      : '<div class="clerk-loading">Sign-up disabled until Clerk keys are configured in .env.</div>';
-    return;
-  }
-  window.Clerk.load().then(function () {
-    if (window.Clerk.session) { window.location.href = "{% url 'my_bookings' %}"; return; }
-    box.innerHTML = '';
-    window.__clerkReady = true;
-    window.Clerk.mountSignUp(document.getElementById('clerkBox'));
-    window.Clerk.addListener(function (e) {
-      if (!e.session) return;
-      var user = e.session.user;
-      var email = (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) || '';
-      fetch("{% url 'clerk_callback' %}", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-        body: JSON.stringify({ clerk_user_id: user.id, email: email, full_name: [user.firstName, user.lastName].filter(Boolean).join(' ') })
-      }).then(function (r) { return r.json(); }).then(function (j) {
-        if (j.ok) window.location.href = j.redirect;
-      });
-    });
-  });
-}
-setTimeout(function () {
-  if (!window.__clerkReady) initClerk(true);
-}, 15000);
-if (window.Clerk) initClerk(true);
-</script>
-{% endblock %}
+{% extends "auth_base.html" %}
+{% block page %}signup{% endblock %}
+{% block title %}DriveGo - Create account{% endblock %}
+{% block art_heading %}Book in minutes. Drive today.{% endblock %}
+{% block booking_note %}Create an account to finish your booking — your dates are saved.{% endblock %}
+{% block heading %}Create your account{% endblock %}
+{% block subheading %}One account for bookings, documents and receipts.{% endblock %}
+{% block auth_mode %}signup{% endblock %}
+{% block switch %}Already have an account? <a href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Log in</a>{% endblock %}

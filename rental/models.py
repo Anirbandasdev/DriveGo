@@ -58,7 +58,7 @@ class Car(models.Model):
     transmission = models.CharField(max_length=20, choices=TRANSMISSION_CHOICES, default="Manual")
     fuel_type = models.CharField(max_length=20, choices=FUEL_CHOICES, default="Petrol")
     price_per_day = models.PositiveIntegerField(default=1500)
-    image_url = models.URLField(blank=True)
+    image_url = models.URLField(max_length=500, blank=True)
     features = models.CharField(max_length=255, default="AC, 5 Doors", help_text="Comma-separated feature list")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="AVAILABLE")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -77,38 +77,58 @@ class Car(models.Model):
     def feature_list(self):
         return [f.strip() for f in self.features.split(",") if f.strip()]
 
-    def blocking_bookings(self, pickup, drop):
-        return Booking.objects.filter(_blocking_q(self, pickup, drop))
+    def blocking_bookings(self, pickup, drop, exclude_ids=None):
+        qs = Booking.objects.filter(_blocking_q(self, pickup, drop))
+        if exclude_ids:
+            qs = qs.exclude(pk__in=exclude_ids)
+        return qs
 
     def blocked_window(self, pickup, drop):
         return CarBlock.objects.filter(car_id=self.pk, start_datetime__lt=drop, end_datetime__gt=pickup)
 
-    def upcoming_bookings(self):
-        """Bookings not yet finished (current or future) that hold this car.
-
-        Used for listing badges: a car with any active upcoming booking is shown
-        as "Booked" even if it is technically free for other windows right now.
-        """
-        now = timezone.now()
-        return self.blocking_bookings(now, now + timedelta(days=3650))
-
-    def is_available_for(self, pickup, drop):
+    def is_available_for(self, pickup, drop, exclude_ids=None):
         if self.status != "AVAILABLE":
             return False
         if self.blocked_window(pickup, drop).exists():
             return False
-        return not self.blocking_bookings(pickup, drop).exists()
+        return not self.blocking_bookings(pickup, drop, exclude_ids).exists()
 
-    def is_listed_available(self):
+    def busy_periods(self, start, end, exclude_ids=None):
+        """Merged, sorted ``[(from, to)]`` intervals inside ``[start, end]`` when the
+        car cannot be booked (bookings that hold it plus admin blocks)."""
+        intervals = list(self.blocking_bookings(start, end, exclude_ids).values_list("pickup_datetime", "dropoff_datetime"))
+        intervals += list(self.blocked_window(start, end).values_list("start_datetime", "end_datetime"))
+        merged = []
+        for s, e in sorted(intervals):
+            if merged and s <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], e)
+            else:
+                merged.append([s, e])
+        return [(s, e) for s, e in merged]
+
+    def next_available_start(self, pickup, drop, exclude_ids=None, horizon_days=180):
+        """Earliest pickup at or after ``pickup`` where a trip of the same length fits.
+
+        Walks the merged busy periods, so back-to-back bookings and admin blocks
+        are skipped over instead of suggesting a slot that still clashes.
+        Returns ``None`` when the car is out of service or nothing fits in the horizon.
+        """
         if self.status != "AVAILABLE":
-            return False
-        if self.blocked_window(timezone.now(), timezone.now() + timedelta(days=3650)).exists():
-            return False
-        return not self.upcoming_bookings().exists()
-
-    def next_free_after(self, pickup, drop):
-        clash = self.blocking_bookings(pickup, drop).order_by("dropoff_datetime").last()
-        return clash.dropoff_datetime if clash else None
+            return None
+        duration = drop - pickup
+        candidate = max(pickup, timezone.now())
+        limit = candidate + timedelta(days=horizon_days)
+        for s, e in self.busy_periods(candidate, limit + duration, exclude_ids):
+            if s >= candidate + duration:
+                break
+            candidate = max(candidate, e)
+        # Round up to the next half hour so suggestions read like real pickup times.
+        extra = (30 - candidate.minute % 30) % 30
+        if extra or candidate.second or candidate.microsecond:
+            candidate = (candidate + timedelta(minutes=extra or 30)).replace(second=0, microsecond=0)
+        if candidate > limit:
+            return None
+        return candidate if self.is_available_for(candidate, candidate + duration, exclude_ids) else None
 
 
 class Customer(models.Model):
@@ -202,6 +222,64 @@ class Booking(models.Model):
         for key, value in self.calculate_price().items():
             setattr(self, key, value)
 
+    OPEN_STATUSES = (Status.PENDING, Status.PENDING_VERIFICATION, Status.CONFIRMED, Status.ACTIVE)
+    CLOSED_STATUSES = (Status.COMPLETED, Status.CANCELLED, Status.REJECTED)
+
+    @property
+    def is_paid(self):
+        return self.payment_status == self.PaymentStatus.PAID
+
+    @property
+    def is_closed(self):
+        return self.status in self.CLOSED_STATUSES
+
+    @property
+    def hold_expired(self):
+        """An unpaid PENDING booking whose reservation window has lapsed."""
+        if self.status != self.Status.PENDING or self.is_paid or not self.created_at:
+            return False
+        return self.created_at < timezone.now() - timedelta(minutes=getattr(settings, "BOOKING_HOLD_MINUTES", 60))
+
+    @property
+    def hold_expires_at(self):
+        if self.status != self.Status.PENDING or not self.created_at:
+            return None
+        return self.created_at + timedelta(minutes=getattr(settings, "BOOKING_HOLD_MINUTES", 60))
+
+    def document_map(self):
+        return {d.document_type: d for d in self.documents.all()}
+
+    def missing_documents(self):
+        have = self.document_map()
+        return [label for value, label in Document.DocType.choices if value not in have]
+
+    def rejected_documents(self):
+        return [d for d in self.documents.all() if d.verification_status == Document.VerificationStatus.REJECTED]
+
+    def documents_verified(self):
+        docs = self.document_map()
+        return len(docs) == len(Document.DocType.choices) and all(
+            d.verification_status == Document.VerificationStatus.VERIFIED for d in docs.values()
+        )
+
+    @property
+    def customer_can_cancel(self):
+        """Customers may cancel until the trip starts; once the car is out, only staff can."""
+        return self.status in (self.Status.PENDING, self.Status.PENDING_VERIFICATION, self.Status.CONFIRMED) and (
+            self.pickup_datetime > timezone.now() or not self.is_paid
+        )
+
+    @property
+    def checkout_step(self):
+        """Name of the URL the customer should resume the booking flow at."""
+        if self.is_closed:
+            return None
+        if self.is_paid:
+            return "verification" if self.rejected_documents() else "confirmation"
+        if self.missing_documents() or self.rejected_documents():
+            return "verification"
+        return "summary"
+
     @classmethod
     def overlaps(cls, car, pickup, drop, exclude_id=None):
         qs = cls.objects.filter(_blocking_q(car, pickup, drop))
@@ -216,8 +294,7 @@ def booking_document_path(instance, filename):
 
 class Document(models.Model):
     class DocType(models.TextChoices):
-        LICENSE_FRONT = "LICENSE_FRONT", "Driving License (Front)"
-        LICENSE_BACK = "LICENSE_BACK", "Driving License (Back)"
+        DRIVING_LICENSE = "DRIVING_LICENSE", "Driving License"
         GOVT_ID = "GOVT_ID", "Government ID"
 
     class VerificationStatus(models.TextChoices):
@@ -241,19 +318,14 @@ class Document(models.Model):
     def __str__(self):
         return f"{self.booking.booking_id} / {self.get_document_type_display()}"
 
-    def mark_verified(self):
-        self.verification_status = self.VerificationStatus.VERIFIED
-        self.verified_at = timezone.now()
-        self.save(update_fields=["verification_status", "verified_at"])
+    @property
+    def storage_name(self):
+        return self.file_reference or (self.file.name if self.file else "")
 
     @property
-    def view_url(self):
-        if self.file_reference:
-            return f"{settings.SUPABASE_URL}/storage/v1/object/public/{self.file_reference}"
-        try:
-            return self.file.url
-        except Exception:
-            return ""
+    def is_pdf(self):
+        return self.storage_name.lower().endswith(".pdf")
+
 
 
 class CarBlock(models.Model):

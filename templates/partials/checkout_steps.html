@@ -1,0 +1,10 @@
+<ol class="co-steps" aria-label="Booking progress">
+  {% for s in steps %}
+  <li class="co-step is-{{ s.state }}"{% if s.state == 'now' %} aria-current="step"{% endif %}>
+    {% if s.url %}<a href="{{ s.url }}">{% else %}<span>{% endif %}
+      <span class="co-step-dot">{% if s.state == 'done' %}<svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>{% else %}{{ s.n }}{% endif %}</span>
+      <span class="co-step-label">{{ s.label }}</span>
+    {% if s.url %}</a>{% else %}</span>{% endif %}
+  </li>
+  {% endfor %}
+</ol>

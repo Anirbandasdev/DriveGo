@@ -1,60 +1,76 @@
 {% extends "admin_base.html" %}
+{% load rental_tags %}
 {% block admin_title %}DriveGo - Admin Cars{% endblock %}
 {% block admin_content %}
-<div class="section">
-  <span class="eyebrow">CONTROL CENTER</span>
-  <h2>Car Fleet</h2>
-  <p class="small muted">Availability by status and the full fleet. Change status to take cars in/out of service.</p>
-</div>
-
-<div class="stat-grid" id="availability">
-  {% for key, value in availability.items %}
-  <div class="stat"><div class="stat-ico {% if key == 'Available' %}g{% elif key == 'Maintenance' %}a{% else %}d{% endif %}"><svg class="ic" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg></div><span class="muted small">{{ key }}</span><b>{{ value }}</b></div>
-  {% endfor %}
-</div>
-
-<div class="panel">
-  <h3>All Cars</h3>
-  {% for car in all_cars %}
-  <div class="kv">
-    <span>{{ car }} <span class="muted small">{{ car.location.name }}</span></span>
-    <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span class="badge {% if car.status == 'AVAILABLE' %}ok{% elif car.status == 'MAINTENANCE' %}warn{% else %}no{% endif %}">{{ car.get_status_display }}</span>
-      <form action="{% url 'admin_set_car_status' car.pk %}" method="post" style="display:flex;gap:6px;align-items:center">{% csrf_token %}
-        <select name="status" class="mini-select">
-          {% for val, label in car.STATUS_CHOICES %}<option value="{{ val }}"{% if car.status == val %} selected{% endif %}>{{ label }}</option>{% endfor %}
-        </select>
-        <button class="btn btn-sm btn-ghost" type="submit">Set</button>
-      </form>
-    </span>
+<header class="adm-head">
+  <div>
+    <h1>Car fleet</h1>
+    <p>Edit prices and details, take cars out of service, and see what each car is doing right now.</p>
   </div>
-  {% empty %}
-  <p class="small muted">No cars yet.</p>
-  {% endfor %}
-</div>
+  <div class="adm-head-actions"><a class="btn btn-primary btn-sm" href="#add-car">Add car</a></div>
+</header>
 
-<div class="panel">
-  <h3>Add Car</h3>
-  <form action="{% url 'admin_add_car' %}" method="post" class="admin-form">{% csrf_token %}
-    <label class="field"><span>Brand</span><input type="text" name="brand" required /></label>
-    <label class="field"><span>Model</span><input type="text" name="model" required /></label>
-    <label class="field"><span>Registration number</span><input type="text" name="registration_number" required /></label>
-    <label class="field"><span>Location</span>
-      <select name="location" required>{% for loc in all_locations %}<option value="{{ loc.pk }}">{{ loc.name }}</option>{% endfor %}</select>
-    </label>
-    <label class="field"><span>Category</span>
-      <select name="category"><option>Hatchback</option><option>Sedan</option><option selected>SUV</option><option>Luxury</option></select></label>
-    <label class="field"><span>Seats</span><input type="number" name="seats" value="5" min="1" /></label>
-    <label class="field"><span>Transmission</span>
-      <select name="transmission"><option selected>Manual</option><option>Automatic</option></select></label>
-    <label class="field"><span>Fuel</span>
-      <select name="fuel_type"><option selected>Petrol</option><option>Diesel</option></select></label>
-    <label class="field"><span>Price / day (₹)</span><input type="number" name="price_per_day" value="1500" min="1" required /></label>
-    <label class="field"><span>Status</span>
-      <select name="status"><option selected>AVAILABLE</option><option>MAINTENANCE</option><option>INACTIVE</option></select></label>
-    <label class="field"><span>Image URL</span><input type="url" name="image_url" /></label>
-    <label class="field"><span>Features (comma separated)</span><input type="text" name="features" value="AC, 5 Doors" /></label>
-    <button class="btn btn-primary" type="submit">Add Car</button>
+<section class="kpis is-3" id="availability">
+  {% for key, value in availability.items %}
+  <div class="kpi"><span>{{ key }}</span><b>{{ value }}</b></div>
+  {% endfor %}
+</section>
+
+<section class="adm-card is-flush">
+  <div class="table-scroll">
+    <table class="adm-table">
+      <thead><tr><th>Car</th><th>Location</th><th class="num">Price/day</th><th>Right now</th><th>Next booking</th><th>Status</th><th><span class="sr-only">Edit</span></th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+      {% with car=row.car %}
+      <tr>
+        <td><div class="car-cell"><img src="{{ car.display_image }}" alt="" loading="lazy" /><span><b>{{ car }}</b><small>{{ car.registration_number }} · {{ car.category }} · {{ car.seats }} seats</small></span></div></td>
+        <td>{{ car.location.name }}</td>
+        <td class="num">₹{{ car.price_per_day|inr }}</td>
+        <td>{% if row.current %}<a class="row-link" href="{% url 'admin_booking_detail' row.current.booking_id %}">{{ row.current.get_status_display }}</a><small>until {{ row.current.dropoff_datetime|date:"d M, h:i A" }}</small>{% else %}<span class="muted-note">Idle</span>{% endif %}</td>
+        <td>{% if row.next %}<a class="row-link" href="{% url 'admin_booking_detail' row.next.booking_id %}">{{ row.next.pickup_datetime|date:"d M, h:i A" }}</a><small>{{ row.upcoming_count }} upcoming</small>{% else %}<span class="muted-note">None</span>{% endif %}</td>
+        <td>
+          <form class="status-form" action="{% url 'admin_set_car_status' car.pk %}" method="post">{% csrf_token %}
+            <select name="status" aria-label="Status for {{ car }}" onchange="this.form.requestSubmit()">
+              {% for val, label in choices.status %}<option value="{{ val }}"{% if car.status == val %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <noscript><button class="btn btn-sm btn-ghost" type="submit">Set</button></noscript>
+          </form>
+        </td>
+        <td class="actions"><a class="btn btn-sm btn-ghost" href="#edit-{{ car.pk }}" onclick="document.getElementById('edit-{{ car.pk }}').open = true">Edit</a></td>
+      </tr>
+      <tr class="edit-row">
+        <td colspan="7">
+          <details id="edit-{{ car.pk }}" class="edit-panel">
+            <summary class="sr-only">Edit {{ car }}</summary>
+            <form action="{% url 'admin_edit_car' car.pk %}" method="post">{% csrf_token %}
+              {% include "partials/admin_car_fields.html" %}
+              <div class="form-actions">
+                <button class="btn btn-ghost btn-sm" type="button" onclick="this.closest('details').open = false">Close</button>
+                <button class="btn btn-primary btn-sm" type="submit">Save changes</button>
+              </div>
+            </form>
+          </details>
+        </td>
+      </tr>
+      {% endwith %}
+      {% empty %}
+      <tr><td colspan="7" class="empty">No cars yet — add your first one below.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="adm-card" id="add-car">
+  <div class="adm-card-head"><h2>Add a car</h2></div>
+  {% if all_locations %}
+  <form action="{% url 'admin_add_car' %}" method="post">{% csrf_token %}
+    {% with car=None %}{% include "partials/admin_car_fields.html" %}{% endwith %}
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Add car</button></div>
   </form>
-</div>
+  {% else %}
+  <p class="muted-note">Add a <a class="row-link" href="{% url 'admin_locations' %}">location</a> first — every car needs a home location.</p>
+  {% endif %}
+</section>
 {% endblock %}

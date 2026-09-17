@@ -136,7 +136,6 @@ F:\car\
 ├── manage.py
 ├── drivego/            # settings (env-based), urls, wsgi, asgi
 ├── rental/             # models, views, forms, urls, admin, utils, tests
-│   ├── management/commands/promote_admin.py
 │   └── migrations/
 ├── templates/          # base.html, partials/, 14 pages (converted 1:1 from the prototype)
 ├── static/css/styles.css + static/js/site.js   # same design, JS trimmed to UI-only
@@ -155,7 +154,7 @@ python manage.py runserver
 
 Sign-in requires Clerk keys in `.env` (`CLERK_PUBLISHABLE_KEY` +
 `CLERK_SECRET_KEY`); there is no demo login fallback. To grant admin access,
-run `python manage.py promote_admin <clerk-user-id-or-email>`.
+use **Make admin** on the Customers page of the admin dashboard.
 Without Razorpay keys the payment page runs in clearly-labeled mock mode and
 still verifies server-side; add keys in `.env` for the live Razorpay flow.
 Without SMTP settings, emails print to the console. `DATABASE_URL` switches
@@ -188,7 +187,7 @@ SQLite to Supabase PostgreSQL; Supabase Storage is used for documents when
   the session, and admins land on `/dashboard/`. Logout clears Django's
   session and signs out of Clerk in the browser.
 - Make an admin: user signs in once, then
-  `python manage.py promote_admin <clerk-user-id-or-email>`.
+  an existing admin clicks **Make admin** on Dashboard → Customers.
 - Demo mode: admins can toggle simulated payments from the dashboard
   ("Demo Mode" panel, stored in the `settings` table). ON = Pay button
   completes bookings without Razorpay; OFF = real Razorpay flow.

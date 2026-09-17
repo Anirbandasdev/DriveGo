@@ -1,54 +1,65 @@
 {% extends "admin_base.html" %}
+{% load rental_tags %}
 {% block admin_title %}DriveGo - Admin Verifications{% endblock %}
 {% block admin_content %}
-<div class="section">
-  <span class="eyebrow">CONTROL CENTER</span>
-  <h2>Document Verification{% if verification_count %} <span class="badge warn">{{ verification_count }} pending</span>{% endif %}</h2>
-  <p class="small muted">Bookings that paid (or uploaded documents) and await your approval. Verify documents, then confirm to release the confirmation email.</p>
-</div>
-
-{% for b in verification_queue %}
-<div class="panel" style="margin-bottom:14px">
-  <div class="kv"><span>{{ b.booking_id }}</span>
-    <span>
-      <span class="badge {% if b.status == 'PENDING_VERIFICATION' %}warn{% elif b.status == 'PENDING' %}info{% endif %}">{{ b.get_status_display }}</span>
-      {% if b.payment_status == 'PAID' %}<span class="badge ok">Paid ₹{{ b.total_amount }}</span>{% else %}<span class="badge no">unpaid</span>{% endif %}
-    </span>
+<header class="adm-head">
+  <div>
+    <h1>Document verification</h1>
+    <p>Paid bookings wait here until you approve the customer's license and ID. Oldest first.</p>
   </div>
-  <div class="kv"><span>Customer · Car</span><b>{{ b.user }} · {{ b.car }} @ {{ b.pickup_location.name }}</b></div>
-  <div class="kv"><span>Period</span><span>{{ b.pickup_datetime|date:"d M, h:i A" }} → {{ b.dropoff_datetime|date:"d M, h:i A" }}</span></div>
+</header>
 
-  {% with docs=b.documents.all %}
-  {% if docs %}
-  <div class="doc-links">
-    {% for d in docs %}
-    <a class="doc-link" href="{{ d.view_url }}" target="_blank" rel="noopener">
-      <svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/><path d="m9 15 2 2 4-4"/></svg>
-      <span>{{ d.get_document_type_display }}</span>
-      <span class="badge {% if d.verification_status == 'VERIFIED' %}ok{% elif d.verification_status == 'REJECTED' %}no{% else %}info{% endif %}">{{ d.get_verification_status_display }}</span>
-    </a>
-    {% if d.verification_status == 'REJECTED' and d.rejection_reason %}
-    <div class="doc-reason">Rejected: {{ d.rejection_reason }}</div>
-    {% endif %}
+<section class="adm-section">
+  <div class="adm-section-head"><h2>Ready for review</h2><span class="pill tone-{% if verification_queue %}warn{% else %}ok{% endif %}">{{ verification_queue|length }} waiting</span></div>
+  <div class="vq">
+    {% for b in verification_queue %}
+    <article class="vq-item">
+      <header class="vq-head">
+        <div>
+          <a class="row-link" href="{% url 'admin_booking_detail' b.booking_id %}">{{ b.booking_id }}</a>
+          <h3>{{ b.user }}</h3>
+          <p>{{ b.user.email }}</p>
+        </div>
+        <div class="vq-meta">
+          <span class="pill tone-{{ b.status|tone }}">{{ b.get_status_display }}</span>
+          <span class="pill tone-{{ b.payment_status|tone }}">{% if b.is_paid %}Paid ₹{{ b.total_amount|inr }}{% else %}{{ b.get_payment_status_display }}{% endif %}</span>
+        </div>
+      </header>
+      <dl class="vq-facts">
+        <div><dt>Car</dt><dd>{{ b.car }} · {{ b.car.registration_number }}</dd></div>
+        <div><dt>Trip</dt><dd>{{ b.pickup_datetime|date:"d M, h:i A" }} → {{ b.dropoff_datetime|date:"d M, h:i A" }}</dd></div>
+        <div><dt>Pickup</dt><dd>{% if b.delivery_method == 'HOME_DELIVERY' %}Delivery · {{ b.delivery_city }}{% else %}{{ b.pickup_location.name }}{% endif %}</dd></div>
+        <div><dt>Waiting</dt><dd>{{ b.created_at|timesince }}</dd></div>
+      </dl>
+      {% include "partials/admin_doc_review.html" %}
+    </article>
+    {% empty %}
+    <div class="adm-empty"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg><b>All caught up</b><span>No paid bookings are waiting on documents.</span></div>
     {% endfor %}
   </div>
-  {% else %}
-  <p class="small muted">No documents uploaded yet.</p>
-  {% endif %}
-  {% endwith %}
+</section>
 
-  {% if b.status == 'PENDING' or b.status == 'PENDING_VERIFICATION' %}
-  <div class="panel-actions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-    <form action="{% url 'admin_approve_docs' b.booking_id %}" method="post">{% csrf_token %}<button class="btn btn-primary" type="submit">✓ Approve &amp; Confirm</button></form>
-    <form action="{% url 'admin_reject_docs' b.booking_id %}" method="post" style="display:flex;gap:8px;align-items:center">{% csrf_token %}
-      <input type="text" name="reason" placeholder="Rejection reason…" required style="min-width:180px" />
-      <button class="btn btn-danger" type="submit">Reject</button>
-    </form>
-    <form action="{% url 'admin_cancel_booking' b.booking_id %}" method="post">{% csrf_token %}<button class="btn btn-ghost" type="submit" onclick="return confirm('Cancel this booking? Paid amount is marked refunded.')">Cancel &amp; Refund</button></form>
+{% if awaiting_payment %}
+<section class="adm-section">
+  <div class="adm-section-head"><h2>Uploaded, not paid yet</h2><span class="pill tone-neutral">{{ awaiting_payment|length }}</span></div>
+  <p class="adm-section-note">You can pre-approve these — the booking confirms automatically once the customer pays.</p>
+  <div class="vq">
+    {% for b in awaiting_payment %}
+    <article class="vq-item is-quiet">
+      <header class="vq-head">
+        <div>
+          <a class="row-link" href="{% url 'admin_booking_detail' b.booking_id %}">{{ b.booking_id }}</a>
+          <h3>{{ b.user }}</h3>
+          <p>{{ b.car }} · {{ b.pickup_datetime|date:"d M" }} → {{ b.dropoff_datetime|date:"d M" }}</p>
+        </div>
+        <div class="vq-meta"><span class="pill tone-neutral">Awaiting payment</span></div>
+      </header>
+      {% include "partials/admin_doc_review.html" %}
+    </article>
+    {% endfor %}
   </div>
-  {% endif %}
-</div>
-{% empty %}
-<div class="panel"><p class="small muted">Nothing waiting for review.</p></div>
-{% endfor %}
+</section>
+{% endif %}
+
+{% include "partials/doc_modal.html" %}
 {% endblock %}

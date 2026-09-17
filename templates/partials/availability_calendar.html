@@ -1,0 +1,23 @@
+{# Six-week availability grid. Click a start day, then an end day. Expects calendar. #}
+<div class="cal" data-calendar>
+  <div class="cal-head"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+  <div class="cal-grid">
+    {% for c in calendar.cells %}
+    <button type="button" class="cal-day is-{{ c.state }}{% if c.today %} is-today{% endif %}" data-date="{{ c.date }}"{% if c.state == 'past' or c.state == 'full' or c.state == 'off' %} disabled{% endif %} aria-label="{{ c.date }} — {% if c.state == 'free' %}free{% elif c.state == 'partial' %}partly booked{% elif c.state == 'full' %}booked{% else %}unavailable{% endif %}">{% if c.first_of_month %}<small>{{ c.month }}</small>{% endif %}{{ c.day }}</button>
+    {% endfor %}
+  </div>
+  <div class="cal-legend">
+    <span><i class="is-free"></i>Free</span>
+    <span><i class="is-partial"></i>Partly booked</span>
+    <span><i class="is-full"></i>Booked</span>
+    <span><i class="is-range"></i>Your trip</span>
+  </div>
+  <p class="cal-hint">Tap a pickup day, then a return day.</p>
+  {% if calendar.busy %}
+  <div class="cal-busy">
+    <b>Already booked</b>
+    <ul>{% for p in calendar.busy %}<li>{{ p.from|date:"D d M, h:i A" }} <span>→</span> {{ p.to|date:"D d M, h:i A" }}</li>{% endfor %}</ul>
+    <p>Every other date is open.</p>
+  </div>
+  {% endif %}
+</div>

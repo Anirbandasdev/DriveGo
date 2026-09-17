@@ -1,0 +1,23 @@
+{# Live availability: date inputs, status line and next-free suggestion. Expects car, window, info. #}
+<div class="av-inputs">
+  <div class="av-field"><label for="avPickupDate">Pickup date</label><input id="avPickupDate" name="pickup_date" type="date" min="{% now 'Y-m-d' %}" value="{{ window.pickup_date }}" required /></div>
+  <div class="av-field"><label for="avPickupTime">Time</label><input id="avPickupTime" name="pickup_time" type="time" value="{{ window.pickup_time }}" required /></div>
+  <div class="av-field"><label for="avDropDate">Return date</label><input id="avDropDate" name="drop_date" type="date" min="{% now 'Y-m-d' %}" value="{{ window.drop_date }}" required /></div>
+  <div class="av-field"><label for="avDropTime">Time</label><input id="avDropTime" name="drop_time" type="time" value="{{ window.drop_time }}" required /></div>
+</div>
+
+<div class="av-status is-{{ info.reason }}" data-av-status aria-live="polite">
+  <span class="av-icon" aria-hidden="true"></span>
+  <div>
+    <b data-av-message>{{ info.message }}</b>
+    <span data-av-detail>{% if info.clash %}Booked {{ info.clash.from|date:"d M, h:i A" }} → {{ info.clash.to|date:"d M, h:i A" }}{% elif info.available %}You can book this car for the selected trip.{% endif %}</span>
+  </div>
+</div>
+
+<div class="av-suggest" data-av-suggest{% if not info.suggestion %} hidden{% endif %}>
+  <div>
+    <small>Next free slot for the same trip length</small>
+    <b data-av-suggest-label>{% if info.suggestion %}{{ info.suggestion.pickup|date:"d M, h:i A" }} → {{ info.suggestion.drop|date:"d M, h:i A" }}{% endif %}</b>
+  </div>
+  <button type="button" class="btn btn-sm btn-ghost" data-av-apply{% if info.suggestion %} data-pickup-date="{{ info.suggestion.params.pickup_date }}" data-pickup-time="{{ info.suggestion.params.pickup_time }}" data-drop-date="{{ info.suggestion.params.drop_date }}" data-drop-time="{{ info.suggestion.params.drop_time }}"{% endif %}>Use these dates</button>
+</div>

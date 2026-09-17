@@ -1,33 +1,52 @@
 {% extends "admin_base.html" %}
 {% block admin_title %}DriveGo - Admin Locations{% endblock %}
 {% block admin_content %}
-<div class="section">
-  <span class="eyebrow">CONTROL CENTER</span>
-  <h2>Pickup Locations</h2>
-  <p class="small muted">Each location's fleet size, how many cars are currently out on a trip, and total bookings.</p>
-</div>
-
-<div class="panel">
-  <h3>Locations</h3>
-  {% for row in locations %}
-  <div class="kv"><span><b>{{ row.location.name }}</b><br /><span class="small muted">{{ row.location.address|default:"" }}</span></span>
-    <span class="small muted">{{ row.cars }} cars · {{ row.booked }} on trip · {{ row.bookings }} bookings</span>
+<header class="adm-head">
+  <div>
+    <h1>Pickup locations</h1>
+    <p>Hidden locations disappear from customer search but keep their cars and booking history.</p>
   </div>
+  <div class="adm-head-actions"><a class="btn btn-primary btn-sm" href="#add-location">Add location</a></div>
+</header>
+
+<div class="loc-grid">
+  {% for row in locations %}
+  {% with loc=row.location %}
+  <article class="adm-card loc{% if not loc.is_active %} is-off{% endif %}">
+    <div class="adm-card-head">
+      <div><h2>{{ loc.name }}</h2><p class="muted-note">{{ loc.address|default:"No address" }}, {{ loc.city }}{% if loc.phone %} · {{ loc.phone }}{% endif %}</p></div>
+      <span class="pill tone-{% if loc.is_active %}ok{% else %}no{% endif %}">{% if loc.is_active %}Active{% else %}Hidden{% endif %}</span>
+    </div>
+    <ul class="loc-stats">
+      <li><b>{{ row.cars }}</b><span>cars</span></li>
+      <li><b>{{ row.booked }}</b><span>on trip</span></li>
+      <li><b>{{ row.upcoming }}</b><span>upcoming</span></li>
+      <li><b>{{ row.bookings }}</b><span>all-time</span></li>
+    </ul>
+    <div class="loc-actions">
+      <a class="btn btn-ghost btn-sm" href="{% url 'cars' %}?location={{ loc.name|urlencode }}" target="_blank" rel="noopener">View on site</a>
+      <form action="{% url 'admin_toggle_location' loc.pk %}" method="post">{% csrf_token %}
+        <button class="btn btn-sm {% if loc.is_active %}btn-danger{% else %}btn-primary{% endif %}" type="submit"{% if loc.is_active %} data-confirm="Hide {{ loc.name }} from customers?"{% endif %}>{% if loc.is_active %}Hide{% else %}Activate{% endif %}</button>
+      </form>
+    </div>
+  </article>
+  {% endwith %}
   {% empty %}
-  <p class="small muted">No locations yet.</p>
+  <div class="adm-empty"><b>No locations yet</b><span>Add your first pickup point below.</span></div>
   {% endfor %}
-  {% for loc in all_locations %}{% if not loc.is_active %}<div class="kv"><span>{{ loc.name }}</span><span class="badge no">inactive</span></div>{% endif %}{% endfor %}
 </div>
 
-<div class="panel">
-  <h3>Add Location</h3>
-  <form action="{% url 'admin_add_location' %}" method="post" class="admin-form">{% csrf_token %}
-    <label class="field"><span>Name</span><input type="text" name="name" required /></label>
-    <label class="field"><span>Address</span><input type="text" name="address" /></label>
-    <label class="field"><span>City</span><input type="text" name="city" value="Kolkata" /></label>
-    <label class="field"><span>Phone</span><input type="text" name="phone" /></label>
-    <label class="field"><span>Image URL</span><input type="url" name="image_url" /></label>
-    <button class="btn btn-primary" type="submit">Add Location</button>
+<section class="adm-card" id="add-location">
+  <div class="adm-card-head"><h2>Add a location</h2></div>
+  <form action="{% url 'admin_add_location' %}" method="post">{% csrf_token %}
+    <div class="form-grid">
+      <label class="av-field"><span>Name</span><input type="text" name="name" required /></label>
+      <label class="av-field"><span>City</span><input type="text" name="city" value="Kolkata" /></label>
+      <label class="av-field is-wide"><span>Address</span><input type="text" name="address" /></label>
+      <label class="av-field"><span>Phone</span><input type="tel" name="phone" /></label>
+      <label class="av-field"><span>Image URL</span><input type="url" name="image_url" placeholder="https://…" /></label>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Add location</button></div>
   </form>
-</div>
+</section>
 {% endblock %}

@@ -1,61 +1,75 @@
 {% extends "base.html" %}
+{% load static rental_tags %}
 {% block page %}confirmation{% endblock %}
-{% block title %}DriveGo - Booking{% endblock %}
+{% block title %}DriveGo - Booking {{ booking.booking_id }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/flow.css' %}" />{% endblock %}
 {% block content %}
-<div class="success-wrap">
-  {% if booking.status == 'PENDING_VERIFICATION' %}
-  <div class="check wait"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><path d="M12 2v4M22 12h-4M12 18v4M2 12h4M5.6 5.6l2.8 2.8M18.4 18.4l-2.8-2.8M18.4 5.6l-2.8 2.8M5.6 18.4l2.8-2.8"/></svg></div>
-  <h2>Payment Received!</h2>
-  <p>We're verifying your documents. You'll get a confirmation email as soon as your booking is approved — typically within a few hours.</p>
-  {% else %}
-  <div class="check"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></div>
-  <h2>Booking Confirmed!</h2>
-  {% endif %}
-  <p class="booking-id">Booking ID: <b>{{ booking.booking_id }}</b></p>
-  {% if booking.payment_status == 'PAID' %}
-  <span class="badge ok">Payment received · ₹{{ booking.total_amount }}</span>
-  {% endif %}
-  <div class="panel" style="text-align:left;margin-top:16px">
-    <div class="kv"><span>Car</span><b>{{ booking.car.brand }} {{ booking.car.model }}</b></div>
-    <div class="kv"><span>Pickup</span><span>{{ booking.pickup_location.name }} · {{ booking.pickup_datetime|date:"d M, h:i A" }}</span></div>
-    <div class="kv"><span>Drop</span><span>Return to {{ booking.pickup_location.name }} · {{ booking.dropoff_datetime|date:"d M, h:i A" }}</span></div>
-    <div class="kv"><span>Delivery</span><span>{{ booking.get_delivery_method_display }}</span></div>
-    {% if booking.status == 'PENDING_VERIFICATION' %}
-    <div class="kv"><span>Documents</span>
-      <span>
-        {% for d in booking.documents.all %}
-        <span class="badge {% if d.verification_status == 'VERIFIED' %}ok{% elif d.verification_status == 'REJECTED' %}no{% else %}info{% endif %}" style="margin:2px">{{ d.get_document_type_display }} · {{ d.get_verification_status_display }}</span>
-        {% empty %}<span>None uploaded</span>{% endfor %}
-      </span>
+<div class="done">
+  <header class="done-hero tone-{{ booking.status|tone }}">
+    <span class="done-mark" aria-hidden="true">
+      {% if booking.status == 'PENDING_VERIFICATION' %}<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      {% elif booking.status == 'COMPLETED' %}<svg class="ic" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>
+      {% else %}<svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>{% endif %}
+    </span>
+    <div>
+      <span class="done-kicker">Booking {{ booking.booking_id }}</span>
+      <h1>{% if booking.status == 'PENDING_VERIFICATION' %}Payment received — verifying documents{% elif booking.status == 'CONFIRMED' %}You're all set!{% elif booking.status == 'ACTIVE' %}Enjoy your trip{% else %}Trip completed{% endif %}</h1>
+      <p>{% if booking.status == 'PENDING_VERIFICATION' %}{% if rejected_docs %}One or more documents need a new copy before we can confirm.{% else %}Our team is checking your documents. You'll get an email the moment it's confirmed — usually within a few hours.{% endif %}{% elif booking.status == 'CONFIRMED' %}Your {{ car.brand }} {{ car.model }} is reserved. A confirmation email is on its way to {{ booking.user.email|default:"your inbox" }}.{% elif booking.status == 'ACTIVE' %}Return the car to {{ booking.pickup_location.name }} by {{ booking.dropoff_datetime|date:"D d M, h:i A" }}.{% else %}Thanks for driving with DriveGo.{% endif %}</p>
     </div>
-    {% endif %}
-    <div class="kv"><span>Total paid</span><b>₹{{ booking.total_amount }}</b></div>
-  </div>
+    <span class="pill tone-{{ booking.status|tone }}">{{ booking.status|customer_status }}</span>
+  </header>
 
-  {% if booking.status == 'PENDING_VERIFICATION' %}
-    {% if rejected_docs %}
-    <div class="booked-note" style="margin-top:14px">
-      <b>Some documents were rejected:</b>
-      <ul style="margin:8px 0 10px">{% for d in rejected_docs %}<li>{{ d.get_document_type_display }} — {{ d.rejection_reason }}</li>{% endfor %}</ul>
-      <a class="btn btn-primary" href="{% url 'verification' booking.booking_id %}">Re-upload documents</a>
+  {% if rejected_docs %}
+  <div class="co-alert is-error done-alert">
+    <div><b>Action needed:</b>
+      <ul>{% for d in rejected_docs %}<li>{{ d.get_document_type_display }} — {{ d.rejection_reason|default:"please upload a clearer copy" }}</li>{% endfor %}</ul>
     </div>
-    {% else %}
-    <p class="small muted" style="margin:12px 0">A confirmation email will be sent once the admin approves your documents.</p>
-    {% endif %}
-  {% else %}
-  <p class="small muted" style="margin:12px 0">A confirmation email has been sent to your registered email address.</p>
+    <a class="btn btn-primary btn-sm" href="{% url 'verification' booking.booking_id %}">Re-upload</a>
+  </div>
   {% endif %}
 
   {% if booking.admin_note %}
-  <div class="admin-note" style="margin-top:14px"><svg class="ic" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.6-.8L3 21l1.9-5.4a8.4 8.4 0 1 1 16.1-4.1Z"/></svg><span><b>Message from DriveGo:</b> {{ booking.admin_note }}</span></div>
+  <div class="co-alert is-info done-alert"><div><b>Message from DriveGo:</b> {{ booking.admin_note }}</div></div>
   {% endif %}
 
-  <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px">
-    <a class="btn btn-primary" href="{% url 'my_bookings' %}">View Booking</a>
-    <button class="btn btn-ghost" onclick="window.print()">Download Receipt</button>
-    {% if booking.status == 'CONFIRMED' or booking.status == 'ACTIVE' or booking.status == 'PENDING_VERIFICATION' %}
-    <form action="{% url 'cancel_booking' booking.booking_id %}" method="post" style="margin:0">{% csrf_token %}
-      <button class="btn btn-danger" type="submit" onclick="return confirm('Cancel this booking? The paid amount will be refunded.')">Cancel Booking</button>
+  <div class="done-grid">
+    <section class="co-card">
+      <h2 class="co-card-title">Trip details</h2>
+      <div class="done-car">
+        <img src="{{ car.display_image }}" alt="{{ car.brand }} {{ car.model }}" />
+        <div><b>{{ car.brand }} {{ car.model }}</b><span>{{ car.seats }} seats · {{ car.transmission }} · {{ car.fuel_type }}</span></div>
+      </div>
+      <div class="trip-line">
+        <div class="trip-stop"><span class="trip-dot"></span><div><small>Pickup</small><b>{{ booking.pickup_datetime|date:"D, d M · h:i A" }}</b><span>{% if booking.delivery_method == 'HOME_DELIVERY' %}Delivered to {{ booking.delivery_address }}, {{ booking.delivery_city }} {{ booking.delivery_pincode }}{% else %}{{ booking.pickup_location.name }} — {{ booking.pickup_location.address }}{% endif %}</span></div></div>
+        <div class="trip-stop end"><span class="trip-dot"></span><div><small>Return</small><b>{{ booking.dropoff_datetime|date:"D, d M · h:i A" }}</b><span>{{ booking.pickup_location.name }}</span></div></div>
+      </div>
+      <dl class="review-price">
+        <div><dt>Car rental ({{ booking.rental_days }} day{{ booking.rental_days|pluralize }})</dt><dd>₹{{ booking.rental_amount|inr }}</dd></div>
+        <div><dt>Delivery</dt><dd>{% if booking.delivery_charge %}₹{{ booking.delivery_charge|inr }}{% else %}Free{% endif %}</dd></div>
+        <div><dt>Taxes</dt><dd>₹{{ booking.tax_amount|inr }}</dd></div>
+        <div class="total"><dt>Paid{% if booking.payment_method %} via {{ booking.payment_method|upper }}{% endif %}</dt><dd>₹{{ booking.total_amount|inr }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="co-card">
+      <h2 class="co-card-title">What happens next</h2>
+      <ol class="next-steps">
+        <li class="is-done"><b>Payment received</b><span>₹{{ booking.total_amount|inr }} on {{ booking.created_at|date:"d M" }}</span></li>
+        <li class="{% if booking.status == 'PENDING_VERIFICATION' %}is-now{% else %}is-done{% endif %}"><b>Documents verified</b>
+          <span>{% for d in docs %}{{ d.get_document_type_display }}: {{ d.get_verification_status_display|lower }}{% if not forloop.last %} · {% endif %}{% empty %}No documents uploaded{% endfor %}</span></li>
+        <li class="{% if booking.status == 'CONFIRMED' %}is-now{% elif booking.status == 'ACTIVE' or booking.status == 'COMPLETED' %}is-done{% endif %}"><b>{% if booking.delivery_method == 'HOME_DELIVERY' %}Car delivered{% else %}Pick up the car{% endif %}</b><span>{{ booking.pickup_datetime|date:"D d M, h:i A" }} · bring your original license</span></li>
+        <li class="{% if booking.status == 'ACTIVE' %}is-now{% elif booking.status == 'COMPLETED' %}is-done{% endif %}"><b>Return</b><span>{{ booking.dropoff_datetime|date:"D d M, h:i A" }} at {{ booking.pickup_location.name }}</span></li>
+      </ol>
+      {% if booking.pickup_location.phone %}<p class="co-privacy">Questions? Call {{ booking.pickup_location.name }} at <a href="tel:{{ booking.pickup_location.phone }}">{{ booking.pickup_location.phone }}</a>.</p>{% endif %}
+    </section>
+  </div>
+
+  <div class="done-actions">
+    <a class="btn btn-primary" href="{% url 'my_bookings' %}">Go to My Bookings</a>
+    <button class="btn btn-ghost" type="button" onclick="window.print()">Print receipt</button>
+    {% if booking.customer_can_cancel %}
+    <form action="{% url 'cancel_booking' booking.booking_id %}" method="post">{% csrf_token %}
+      <button class="btn btn-danger" type="submit" data-confirm="Cancel this booking? The full amount of ₹{{ booking.total_amount|inr }} will be refunded.">Cancel booking</button>
     </form>
     {% endif %}
   </div>

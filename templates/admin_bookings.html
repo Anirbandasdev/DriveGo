@@ -1,46 +1,60 @@
 {% extends "admin_base.html" %}
+{% load rental_tags %}
 {% block admin_title %}DriveGo - Admin Bookings{% endblock %}
 {% block admin_content %}
-<div class="section">
-  <span class="eyebrow">CONTROL CENTER</span>
-  <h2>Bookings</h2>
-  <p class="small muted">All bookings across all locations, newest first. Use the action buttons to manage the trip lifecycle.</p>
-</div>
+<header class="adm-head">
+  <div>
+    <h1>Bookings</h1>
+    <p>{% if q %}Results for “{{ q }}”{% else %}Every booking across all locations, newest first.{% endif %}</p>
+  </div>
+  <form class="adm-filter-search" method="get">
+    <input type="hidden" name="status" value="{{ status_filter }}" />
+    <input type="search" name="q" value="{{ q }}" placeholder="ID, customer, car or reg. no." aria-label="Search bookings" />
+    <button class="btn btn-ghost btn-sm" type="submit">Search</button>
+    {% if q %}<a class="btn btn-ghost btn-sm" href="?status={{ status_filter }}">Clear</a>{% endif %}
+  </form>
+</header>
 
-<div class="panel">
-  <div style="overflow-x:auto">
-    <table>
-      <tr><th>Booking</th><th>Car</th><th>Customer</th><th>Period</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+<nav class="seg adm-seg" aria-label="Booking status">
+  {% for t in tabs %}
+  <a class="{% if status_filter == t.key %}on{% endif %}" href="?status={{ t.key }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">{{ t.label }} <span>{{ t.count }}</span></a>
+  {% endfor %}
+</nav>
+
+<section class="adm-card is-flush">
+  <div class="table-scroll">
+    <table class="adm-table">
+      <thead><tr><th>Booking</th><th>Customer</th><th>Car</th><th>Trip</th><th class="num">Amount</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
       {% for b in bookings_list %}
       <tr>
-        <td>{{ b.booking_id }}</td>
-        <td>{{ b.car }}<br /><span class="small muted">{{ b.pickup_location.name }}</span></td>
-        <td>{{ b.user }}</td>
-        <td>{{ b.pickup_datetime|date:"d M, h:i A" }}<br /><span class="small muted">→ {{ b.dropoff_datetime|date:"d M, h:i A" }}</span></td>
-        <td>₹{{ b.total_amount }}<br /><span class="small muted">{{ b.payment_status }}</span></td>
-        <td><span class="badge {% if b.status == 'CONFIRMED' or b.status == 'ACTIVE' %}ok{% elif b.status == 'COMPLETED' %}info{% elif b.status == 'PENDING_VERIFICATION' %}warn{% else %}no{% endif %}">{{ b.get_status_display }}</span></td>
-        <td>
-          <div class="panel-actions" style="display:flex;gap:8px;flex-wrap:wrap">
-            {% if b.status == 'CONFIRMED' %}
-            <form action="{% url 'admin_trip_action' b.booking_id 'start' %}" method="post">{% csrf_token %}<button class="btn btn-sm" type="submit">Start trip</button></form>
-            {% endif %}
-            {% if b.status == 'CONFIRMED' or b.status == 'ACTIVE' %}
-            <form action="{% url 'admin_trip_action' b.booking_id 'complete' %}" method="post">{% csrf_token %}<button class="btn btn-sm" type="submit">Complete</button></form>
-            {% endif %}
-            {% if b.status != 'COMPLETED' and b.status != 'CANCELLED' and b.status != 'REJECTED' %}
-            <form action="{% url 'admin_cancel_booking' b.booking_id %}" method="post">{% csrf_token %}<button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('Cancel this booking? Paid amount is marked refunded.')">Cancel</button></form>
-            {% endif %}
-            <form action="{% url 'admin_set_note' b.booking_id %}" method="post" style="display:flex;gap:6px;align-items:center">{% csrf_token %}
-              <input type="text" name="note" placeholder="note…" value="{{ b.admin_note }}" class="note-input" />
-              <button class="btn btn-sm btn-ghost" type="submit">Note</button>
-            </form>
-          </div>
+        <td><a class="row-link" href="{% url 'admin_booking_detail' b.booking_id %}">{{ b.booking_id }}</a><small>{{ b.created_at|date:"d M, h:i A" }}</small></td>
+        <td>{{ b.user }}<small>{{ b.user.email }}</small></td>
+        <td>{{ b.car }}<small>{{ b.car.registration_number }} · {{ b.pickup_location.name }}</small></td>
+        <td>{{ b.pickup_datetime|date:"d M, h:i A" }}<small>→ {{ b.dropoff_datetime|date:"d M, h:i A" }}</small></td>
+        <td class="num">₹{{ b.total_amount|inr }}<small><span class="dot tone-{{ b.payment_status|tone }}"></span>{{ b.get_payment_status_display }}</small></td>
+        <td><span class="pill tone-{{ b.status|tone }}">{{ b.get_status_display }}</span>{% if b.hold_expired %}<small>hold expired</small>{% endif %}</td>
+        <td class="actions">
+          {% if b.status == 'CONFIRMED' %}
+          <form action="{% url 'admin_trip_action' b.booking_id 'start' %}" method="post">{% csrf_token %}<button class="btn btn-sm btn-ghost" type="submit">Start trip</button></form>
+          {% elif b.status == 'ACTIVE' %}
+          <form action="{% url 'admin_trip_action' b.booking_id 'complete' %}" method="post">{% csrf_token %}<button class="btn btn-sm btn-ghost" type="submit">Complete</button></form>
+          {% endif %}
+          <a class="btn btn-sm btn-ghost" href="{% url 'admin_booking_detail' b.booking_id %}">Manage</a>
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="7" class="muted">No bookings yet.</td></tr>
+      <tr><td colspan="7" class="empty">No bookings match this view.</td></tr>
       {% endfor %}
+      </tbody>
     </table>
   </div>
-</div>
+  {% if page.paginator.num_pages > 1 %}
+  <nav class="pager" aria-label="Pages">
+    {% if page.has_previous %}<a class="btn btn-ghost btn-sm" href="?status={{ status_filter }}&amp;q={{ q|urlencode }}&amp;page={{ page.previous_page_number }}">← Newer</a>{% else %}<span></span>{% endif %}
+    <span>Page {{ page.number }} of {{ page.paginator.num_pages }} · {{ page.paginator.count }} bookings</span>
+    {% if page.has_next %}<a class="btn btn-ghost btn-sm" href="?status={{ status_filter }}&amp;q={{ q|urlencode }}&amp;page={{ page.next_page_number }}">Older →</a>{% else %}<span></span>{% endif %}
+  </nav>
+  {% endif %}
+</section>
 {% endblock %}

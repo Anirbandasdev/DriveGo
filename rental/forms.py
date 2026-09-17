@@ -1,26 +1,14 @@
+import re
+from datetime import datetime, timedelta
+
 from django import forms
 from django.utils import timezone
 
-from .models import Booking, Document, Location
+from .models import Booking
 
 ALLOWED_DOC_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "application/pdf": ".pdf"}
 MAX_DOC_BYTES = 5 * 1024 * 1024
-
-
-class SearchForm(forms.Form):
-    SORT_CHOICES = [("Recommended", "Recommended"), ("Low", "Price Low to High"), ("High", "Price High to Low")]
-
-    location = forms.CharField(required=False)
-    pickup_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
-    pickup_time = forms.TimeField(required=False, widget=forms.TimeInput(attrs={"type": "time"}))
-    drop_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
-    drop_time = forms.TimeField(required=False, widget=forms.TimeInput(attrs={"type": "time"}))
-    category = forms.CharField(required=False)
-    max_price = forms.IntegerField(required=False, min_value=0)
-    seats = forms.IntegerField(required=False, min_value=1)
-    transmission = forms.CharField(required=False)
-    fuel_type = forms.CharField(required=False)
-    sort = forms.ChoiceField(required=False, choices=SORT_CHOICES)
+MAX_RENTAL_DAYS = 60
 
 
 class BookingDatesForm(forms.Form):
@@ -30,8 +18,8 @@ class BookingDatesForm(forms.Form):
     drop_time = forms.TimeField(widget=forms.TimeInput(attrs={"type": "time"}))
 
     def cleaned_datetimes(self):
-        pickup = timezone.make_aware(timezone.datetime.combine(self.cleaned_data["pickup_date"], self.cleaned_data["pickup_time"]))
-        drop = timezone.make_aware(timezone.datetime.combine(self.cleaned_data["drop_date"], self.cleaned_data["drop_time"]))
+        pickup = timezone.make_aware(datetime.combine(self.cleaned_data["pickup_date"], self.cleaned_data["pickup_time"]))
+        drop = timezone.make_aware(datetime.combine(self.cleaned_data["drop_date"], self.cleaned_data["drop_time"]))
         return pickup, drop
 
     def clean(self):
@@ -40,8 +28,10 @@ class BookingDatesForm(forms.Form):
             pickup, drop = self.cleaned_datetimes()
             if drop <= pickup:
                 raise forms.ValidationError("Drop-off must be after pickup.")
-            if pickup < timezone.now() - timezone.timedelta(hours=1):
+            if pickup < timezone.now() - timedelta(minutes=10):
                 raise forms.ValidationError("Pickup time must be in the future.")
+            if drop - pickup > timedelta(days=MAX_RENTAL_DAYS):
+                raise forms.ValidationError(f"Trips can be at most {MAX_RENTAL_DAYS} days long.")
         return cleaned
 
 
@@ -56,14 +46,16 @@ class DeliveryForm(forms.Form):
         cleaned = super().clean()
         if cleaned.get("delivery_method") == "HOME_DELIVERY":
             for field in ("delivery_address", "delivery_city", "delivery_pincode"):
-                if not cleaned.get(field):
+                if not (cleaned.get(field) or "").strip():
                     self.add_error(field, "This field is required for home delivery.")
+            pincode = (cleaned.get("delivery_pincode") or "").strip()
+            if pincode and not re.fullmatch(r"\d{6}", pincode):
+                self.add_error("delivery_pincode", "Enter a valid 6-digit PIN code.")
         return cleaned
 
 
 class DocumentUploadForm(forms.Form):
-    dl_front = forms.FileField(required=False)
-    dl_back = forms.FileField(required=False)
+    driving_license = forms.FileField(required=False)
     govt_id = forms.FileField(required=False)
 
     def clean_file(self, field_name):
@@ -76,28 +68,8 @@ class DocumentUploadForm(forms.Form):
             raise forms.ValidationError("Maximum file size is 5 MB.")
         return uploaded
 
-    def clean_dl_front(self):
-        return self.clean_file("dl_front")
-
-    def clean_dl_back(self):
-        return self.clean_file("dl_back")
+    def clean_driving_license(self):
+        return self.clean_file("driving_license")
 
     def clean_govt_id(self):
         return self.clean_file("govt_id")
-
-    def clean(self):
-        cleaned = super().clean()
-        if not (cleaned.get("dl_front") or cleaned.get("dl_back") or cleaned.get("govt_id")):
-            raise forms.ValidationError("Please choose at least one document to upload.")
-        return cleaned
-
-    def required_missing(self, booking):
-        have = set(booking.documents.values_list("document_type", flat=True))
-        missing = []
-        if Document.DocType.LICENSE_FRONT not in have and not self.cleaned_data.get("dl_front"):
-            missing.append("Driving License (Front)")
-        if Document.DocType.LICENSE_BACK not in have and not self.cleaned_data.get("dl_back"):
-            missing.append("Driving License (Back)")
-        if Document.DocType.GOVT_ID not in have and not self.cleaned_data.get("govt_id"):
-            missing.append("Government ID")
-        return missing

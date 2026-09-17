@@ -1,0 +1,25 @@
+{# Shared add/edit car fields. Expects choices, all_locations and optionally car. #}
+<div class="form-grid">
+  <label class="av-field"><span>Brand</span><input type="text" name="brand" value="{{ car.brand|default:'' }}" required /></label>
+  <label class="av-field"><span>Model</span><input type="text" name="model" value="{{ car.model|default:'' }}" required /></label>
+  <label class="av-field"><span>Registration no.</span><input type="text" name="registration_number" value="{{ car.registration_number|default:'' }}" placeholder="WB02AB1234" required /></label>
+  <label class="av-field"><span>Home location</span>
+    <select name="location" required>{% for loc in all_locations %}<option value="{{ loc.pk }}"{% if car.location_id == loc.pk %} selected{% endif %}>{{ loc.name }}{% if not loc.is_active %} (inactive){% endif %}</option>{% endfor %}</select>
+  </label>
+  <label class="av-field"><span>Category</span>
+    <select name="category">{% for val, label in choices.category %}<option value="{{ val }}"{% if car.category == val or not car and val == 'SUV' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  </label>
+  <label class="av-field"><span>Price / day (₹)</span><input type="number" name="price_per_day" min="1" value="{{ car.price_per_day|default:1500 }}" required /></label>
+  <label class="av-field"><span>Seats</span><input type="number" name="seats" min="1" max="20" value="{{ car.seats|default:5 }}" /></label>
+  <label class="av-field"><span>Transmission</span>
+    <select name="transmission">{% for val, label in choices.transmission %}<option value="{{ val }}"{% if car.transmission == val %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  </label>
+  <label class="av-field"><span>Fuel</span>
+    <select name="fuel_type">{% for val, label in choices.fuel_type %}<option value="{{ val }}"{% if car.fuel_type == val %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  </label>
+  <label class="av-field"><span>Status</span>
+    <select name="status">{% for val, label in choices.status %}<option value="{{ val }}"{% if car.status == val %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  </label>
+  <label class="av-field is-wide"><span>Image URL</span><input type="url" name="image_url" value="{{ car.image_url|default:'' }}" placeholder="https://…" /></label>
+  <label class="av-field is-wide"><span>Features (comma separated)</span><input type="text" name="features" value="{{ car.features|default:'AC, 5 Doors' }}" /></label>
+</div>

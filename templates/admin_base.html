@@ -1,22 +1,50 @@
 {% extends "base.html" %}
+{% load static %}
 {% block page %}admin{% endblock %}
 {% block title %}{% block admin_title %}DriveGo - Admin{% endblock %}{% endblock %}
-{% block content %}
-<div class="admin-layout">
-  <aside class="sidebar">
-    <p class="small muted" style="text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin:0 0 10px 6px">DriveGo Admin</p>
-    <a href="{% url 'admin_dashboard' %}" class="{% if active == 'overview' %}on{% endif %}">Overview</a>
-    <a href="{% url 'admin_verifications' %}" class="{% if active == 'verifications' %}on{% endif %}">Verifications{% if verification_count %} <span class="badge warn">{{ verification_count }}</span>{% endif %}</a>
-    <a href="{% url 'admin_bookings' %}" class="{% if active == 'bookings' %}on{% endif %}">Bookings</a>
-    <a href="{% url 'admin_customers' %}" class="{% if active == 'customers' %}on{% endif %}">Customers</a>
-    <hr />
-    <a href="{% url 'admin_cars' %}" class="{% if active == 'cars' %}on{% endif %}">Cars</a>
-    <a href="{% url 'admin_locations' %}" class="{% if active == 'locations' %}on{% endif %}">Locations</a>
-    <a href="{% url 'admin_blocks' %}" class="{% if active == 'blocks' %}on{% endif %}">Block Dates</a>
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/flow.css' %}" /><link rel="stylesheet" href="{% static 'css/admin.css' %}" />{% endblock %}
+{% block navbar %}{% endblock %}
+{% block messages %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block main %}
+<div class="adm">
+  <aside class="adm-side" id="admSide">
+    <a class="adm-brand" href="{% url 'admin_dashboard' %}">
+      <span class="adm-logo">D</span>
+      <span><b>DriveGo</b><small>Admin console</small></span>
+    </a>
+    <nav class="adm-nav" aria-label="Admin">
+      <span class="adm-nav-label">Operations</span>
+      <a href="{% url 'admin_dashboard' %}" class="{% if active == 'overview' %}on{% endif %}"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Overview</span></a>
+      <a href="{% url 'admin_verifications' %}" class="{% if active == 'verifications' %}on{% endif %}"><svg class="ic" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/><path d="m9 15 2 2 4-4"/></svg><span>Verifications</span>{% if verification_count %}<em class="adm-count">{{ verification_count }}</em>{% endif %}</a>
+      <a href="{% url 'admin_bookings' %}" class="{% if active == 'bookings' %}on{% endif %}"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Bookings</span></a>
+      <a href="{% url 'admin_customers' %}" class="{% if active == 'customers' %}on{% endif %}"><svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Customers</span></a>
+      <span class="adm-nav-label">Fleet</span>
+      <a href="{% url 'admin_cars' %}" class="{% if active == 'cars' %}on{% endif %}"><svg class="ic" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg><span>Cars</span></a>
+      <a href="{% url 'admin_blocks' %}" class="{% if active == 'blocks' %}on{% endif %}"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m14 14-4 4M10 14l4 4"/></svg><span>Blocked dates</span></a>
+      <a href="{% url 'admin_locations' %}" class="{% if active == 'locations' %}on{% endif %}"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg><span>Locations</span></a>
+    </nav>
+    <div class="adm-side-foot">
+      <a href="{% url 'home' %}"><svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span>Customer site</span></a>
+      {% if current_customer %}<div class="adm-me"><span class="adm-me-av">{{ current_customer.full_name|default:current_customer.email|default:"A"|slice:":1"|upper }}</span><span><b>{{ current_customer.full_name|default:"Admin" }}</b><small>{{ current_customer.email }}</small></span></div>{% endif %}
+    </div>
   </aside>
+  <button class="adm-scrim" type="button" aria-label="Close menu" data-adm-toggle></button>
 
-  <div class="admin-content">
-    {% block admin_content %}{% endblock %}
+  <div class="adm-body">
+    <header class="adm-top">
+      <button class="adm-menu" type="button" aria-label="Open menu" aria-controls="admSide" data-adm-toggle><svg class="ic" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
+      <form class="adm-search" action="{% url 'admin_bookings' %}" method="get" role="search">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" name="q" value="{{ q|default:'' }}" placeholder="Search bookings, customers, cars…" aria-label="Search bookings" />
+        <input type="hidden" name="status" value="all" />
+      </form>
+      <a class="btn btn-ghost btn-sm adm-top-link" href="{% url 'logout' %}">Log out</a>
+    </header>
+    {% if messages %}<div class="adm-toasts">{% include "partials/toasts.html" %}</div>{% endif %}
+    <main class="adm-main">
+      {% block admin_content %}{% endblock %}
+    </main>
   </div>
 </div>
 {% endblock %}

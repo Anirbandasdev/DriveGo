@@ -5,20 +5,20 @@
   <div class="check"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></div>
   <h2>Signed out</h2>
   <p class="muted">You have been signed out of DriveGo on this device.</p>
-  <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px">
+  <div class="actions-row">
     <a class="btn btn-primary" href="{% url 'home' %}">Back to Home</a>
     <a class="btn btn-ghost" href="{% url 'login' %}">Sign in again</a>
   </div>
 </div>
 {% endblock %}
+{% block body_attrs %} data-auth-page{% endblock %}
 {% block scripts %}
-{% if clerk_key %}<script async crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_key }}" src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js" onload="signOutClerk()"></script>{% endif %}
+{% if clerk_key %}
 <script>
-window.__noSync = true;
-function signOutClerk() {
-  if (!window.Clerk) return;
-  window.Clerk.load().then(function () { window.Clerk.signOut(); });
-}
-signOutClerk();
+/* Django's session is already gone; end the Clerk session too, staying on this page. */
+DriveGoAuth.load().then(function (clerk) {
+  if (clerk.session) clerk.signOut({ redirectUrl: window.location.href });
+}).catch(function () {});
 </script>
+{% endif %}
 {% endblock %}

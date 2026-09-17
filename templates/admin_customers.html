@@ -1,28 +1,60 @@
 {% extends "admin_base.html" %}
+{% load rental_tags %}
 {% block admin_title %}DriveGo - Admin Customers{% endblock %}
 {% block admin_content %}
-<div class="section">
-  <span class="eyebrow">CONTROL CENTER</span>
-  <h2>Customer Directory</h2>
-  <p class="small muted">Every registered customer with their trip history.</p>
-</div>
+<header class="adm-head">
+  <div>
+    <h1>Customers</h1>
+    <p>{{ page.paginator.count }} registered account{{ page.paginator.count|pluralize }}{% if q %} matching “{{ q }}”{% endif %}. People appear here after they sign in once; use <b>Make admin</b> to give them access to this console.</p>
+  </div>
+  <form class="adm-filter-search" method="get">
+    <input type="search" name="q" value="{{ q }}" placeholder="Name, email or phone" aria-label="Search customers" />
+    <button class="btn btn-ghost btn-sm" type="submit">Search</button>
+    {% if q %}<a class="btn btn-ghost btn-sm" href="{% url 'admin_customers' %}">Clear</a>{% endif %}
+  </form>
+</header>
 
-<div class="panel">
-  <div style="overflow-x:auto">
-    <table>
-      <tr><th>Name</th><th>Email</th><th>Role</th><th>Completed trips</th><th>Total bookings</th></tr>
-      {% for row in customers %}
+<section class="adm-card is-flush">
+  <div class="table-scroll">
+    <table class="adm-table">
+      <thead><tr><th>Customer</th><th>Role</th><th class="num">Bookings</th><th class="num">Completed</th><th class="num">Paid total</th><th>Last booking</th><th>Joined</th><th><span class="sr-only">Access</span></th></tr></thead>
+      <tbody>
+      {% for c in customers %}
       <tr>
-        <td>{{ row.customer.full_name|default:row.customer }}</td>
-        <td>{{ row.customer.email|default:"—" }}</td>
-        <td>{% if row.customer.role == 'ADMIN' %}<span class="badge info">Admin</span>{% else %}<span class="badge ok">Customer</span>{% endif %}</td>
-        <td>{{ row.trips }}</td>
-        <td>{{ row.bookings_total }}</td>
+        <td><div class="who"><span class="who-av">{{ c.full_name|default:c.email|default:"?"|slice:":1"|upper }}</span><span>{{ c.full_name|default:"—" }}<small>{{ c.email|default:"no email" }}</small></span></div></td>
+        <td>{% if c.role == 'ADMIN' %}<span class="pill tone-info">Admin</span>{% else %}<span class="pill tone-neutral">Customer</span>{% endif %}</td>
+        <td class="num">{% if c.bookings_total %}<a class="row-link" href="{% url 'admin_bookings' %}?status=all&amp;q={{ c.email|urlencode }}">{{ c.bookings_total }}</a>{% else %}0{% endif %}</td>
+        <td class="num">{{ c.trips }}</td>
+        <td class="num">₹{{ c.spent|default:0|inr }}</td>
+        <td>{% if c.last_booking %}{{ c.last_booking|date:"d M Y" }}{% else %}—{% endif %}</td>
+        <td>{{ c.created_at|date:"d M Y" }}</td>
+        <td class="actions">
+          {% if c.pk == me.pk %}<span class="muted-note">You</span>
+          {% else %}
+          <form action="{% url 'admin_set_role' c.pk %}" method="post">{% csrf_token %}
+            {% if c.role == 'ADMIN' %}
+            <input type="hidden" name="role" value="CUSTOMER" />
+            <button class="btn btn-sm btn-danger" type="submit" data-confirm="Remove admin access for {{ c.full_name|default:c.email }}?">Remove admin</button>
+            {% else %}
+            <input type="hidden" name="role" value="ADMIN" />
+            <button class="btn btn-sm btn-ghost" type="submit" data-confirm="Give {{ c.full_name|default:c.email }} full access to the admin console?">Make admin</button>
+            {% endif %}
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% empty %}
-      <tr><td colspan="5" class="muted">No customers yet.</td></tr>
+      <tr><td colspan="8" class="empty">No customers found.</td></tr>
       {% endfor %}
+      </tbody>
     </table>
   </div>
-</div>
+  {% if page.paginator.num_pages > 1 %}
+  <nav class="pager" aria-label="Pages">
+    {% if page.has_previous %}<a class="btn btn-ghost btn-sm" href="?q={{ q|urlencode }}&amp;page={{ page.previous_page_number }}">← Previous</a>{% else %}<span></span>{% endif %}
+    <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a class="btn btn-ghost btn-sm" href="?q={{ q|urlencode }}&amp;page={{ page.next_page_number }}">Next →</a>{% else %}<span></span>{% endif %}
+  </nav>
+  {% endif %}
+</section>
 {% endblock %}

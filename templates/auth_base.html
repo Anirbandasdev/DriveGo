@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{# Shared layout for /login/ and /signup/. Child templates set auth_mode, heading and copy blocks. #}
+{% block body_attrs %} data-auth-page{% endblock %}
+{% block messages %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
+<div class="au">
+  <aside class="au-art" aria-hidden="true">
+    <img src="https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=1400&auto=format&fit=crop" alt="" loading="eager" />
+    <div class="au-art-copy">
+      <span class="au-kicker"><span></span>DriveGo · Kolkata</span>
+      <h2>{% block art_heading %}Your next drive starts here.{% endblock %}</h2>
+      <ul>
+        <li><svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Live availability on every car</li>
+        <li><svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Free cancellation before pickup</li>
+        <li><svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Pickup in town or delivered home</li>
+      </ul>
+    </div>
+  </aside>
+
+  <section class="au-panel">
+    <div class="au-card">
+      {% if messages %}{% include "partials/toasts.html" %}{% endif %}
+      {% if next and '/booking/' in next %}
+      <div class="au-note"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>{% block booking_note %}Sign in to continue your booking — your dates are saved.{% endblock %}</span></div>
+      {% endif %}
+      <h1>{% block heading %}{% endblock %}</h1>
+      <p class="au-sub">{% block subheading %}{% endblock %}</p>
+
+      {% if clerk_key %}
+      <div id="clerkBox" class="au-clerk" data-mode="{% block auth_mode %}signin{% endblock %}" data-next="{{ next|default:'' }}" aria-live="polite">
+        <div class="au-skeleton" aria-label="Loading secure sign-in">
+          <span class="sk sk-btn"></span><span class="sk sk-line"></span><span class="sk sk-label"></span><span class="sk sk-input"></span><span class="sk sk-btn is-primary"></span>
+        </div>
+      </div>
+      {% else %}
+      <div class="au-alert">Sign-in isn't configured. Add <code>CLERK_PUBLISHABLE_KEY</code> and <code>CLERK_SECRET_KEY</code> to <code>.env</code>.</div>
+      {% endif %}
+
+      <p class="au-switch">{% block switch %}{% endblock %}</p>
+      <p class="au-legal"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Secure sign-in. We never see your Google password.</p>
+    </div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if clerk_key %}
+<script>
+(function () {
+  var box = document.getElementById("clerkBox");
+  var mode = box.dataset.mode;
+  var next = box.dataset.next;
+  var finishing = false;
+
+  function message(html) { box.innerHTML = html; }
+
+  function failure(text) {
+    finishing = false;
+    message(
+      '<div class="au-alert"><b>' + text + '</b><div class="au-alert-actions">' +
+      '<button type="button" class="btn btn-primary btn-sm" data-retry>Try again</button>' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-switch-account>Use another account</button></div></div>'
+    );
+    box.querySelector("[data-retry]").addEventListener("click", function () { window.location.reload(); });
+    box.querySelector("[data-switch-account]").addEventListener("click", function () {
+      window.Clerk.signOut({ redirectUrl: window.location.href });
+    });
+  }
+
+  function finish(session) {
+    if (finishing) return;
+    finishing = true;
+    message('<div class="au-progress"><span class="spinner"></span>' + (mode === "signup" ? "Setting up your account…" : "Signing you in…") + "</div>");
+    DriveGoAuth.syncServer(session, next).then(function (j) {
+      /* replace(): Back from the next page must not land on a half-finished login. */
+      if (j.ok) window.location.replace(j.redirect);
+      else failure(j.error || "We couldn't sign you in.");
+    }).catch(function () { failure("Network error while signing in."); });
+  }
+
+  DriveGoAuth.load(next).then(function (clerk) {
+    if (clerk.session) { finish(clerk.session); return; }
+    box.innerHTML = "";
+    var here = DriveGoAuth.withNext(mode === "signup" ? DriveGoAuth.config.signupUrl : DriveGoAuth.config.loginUrl, next);
+    var options = {
+      appearance: DriveGoAuth.appearance,
+      routing: "hash",
+      signInUrl: DriveGoAuth.withNext(DriveGoAuth.config.loginUrl, next),
+      signUpUrl: DriveGoAuth.withNext(DriveGoAuth.config.signupUrl, next),
+      fallbackRedirectUrl: here,
+      forceRedirectUrl: here
+    };
+    if (mode === "signup") clerk.mountSignUp(box, options);
+    else clerk.mountSignIn(box, options);
+    clerk.addListener(function (state) { if (state.session) finish(state.session); });
+  }).catch(function () {
+    message('<div class="au-alert"><b>Secure sign-in failed to load.</b> Check your connection.<div class="au-alert-actions"><button type="button" class="btn btn-primary btn-sm" onclick="location.reload()">Reload</button></div></div>');
+  });
+
+  /* Pages restored from the back/forward cache keep a stale, half-mounted widget. */
+  window.addEventListener("pageshow", function (event) { if (event.persisted) window.location.reload(); });
+})();
+</script>
+{% endif %}
+{% endblock %}

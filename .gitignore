@@ -1,4 +1,6 @@
 .env
+.env.vercel
+.env.production
 db.sqlite3
 media/
 staticfiles/

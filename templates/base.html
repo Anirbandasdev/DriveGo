@@ -8,51 +8,19 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{% static 'css/styles.css' %}" />
+<link rel="stylesheet" href="{% static 'css/public.css' %}" />
+{% block extra_css %}{% endblock %}
 </head>
-<body data-page="{% block page %}{% endblock %}"{% if current_customer %} data-authed="1"{% endif %}>
-{% include "partials/navbar.html" %}
-{% if messages %}<div class="container"><div class="toasts" id="toasts">{% for message in messages %}<div class="toast {{ message.tags }}"><span>{{ message }}</span><button type="button" aria-label="Dismiss" onclick="this.parentElement.remove()">✕</button></div>{% endfor %}</div></div>{% endif %}
-<main class="container">{% block content %}{% endblock %}</main>
-{% include "partials/footer.html" %}
+<body data-page="{% block page %}{% endblock %}"{% if current_customer %} data-authed="1"{% endif %}{% block body_attrs %}{% endblock %}>
+{% block navbar %}{% include "partials/navbar.html" %}{% endblock %}
+{% block messages %}{% if messages %}<div class="container">{% include "partials/toasts.html" %}</div>{% endif %}{% endblock %}
+{% block main %}<main class="container">{% block content %}{% endblock %}</main>{% endblock %}
+{% block footer %}{% include "partials/footer.html" %}{% endblock %}
 <script src="{% static 'js/site.js' %}"></script>
 {% if clerk_key %}
+<div id="clerkConfig" hidden data-login-url="{% url 'login' %}" data-signup-url="{% url 'signup' %}" data-callback-url="{% url 'clerk_callback' %}" data-logout-url="{% url 'logout' %}" data-home-url="{% url 'home' %}"></div>
 <script async crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_key }}" src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js"></script>
-<script>
-function drivegoGetCookie(name) {
-  var value = '; ' + document.cookie;
-  var parts = value.split('; ' + name + '=');
-  if (parts.length === 2) return parts.pop().split(';').shift();
-}
-function drivegoSyncSession() {
-  if (document.getElementById('clerkBox') || window.__noSync) return;
-  if (!window.Clerk) {
-    if (!window.__clerkTries) window.__clerkTries = 0;
-    if (window.__clerkTries++ < 40) setTimeout(drivegoSyncSession, 500);
-    return;
-  }
-  window.Clerk.load().then(function () {
-    var authed = document.body.hasAttribute('data-authed');
-    var sess = window.Clerk.session;
-    if (sess && !authed) {
-      document.getElementById('authLoader').hidden = false;
-      var user = sess.user;
-      var email = (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) || '';
-      fetch("{% url 'clerk_callback' %}", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': drivegoGetCookie('csrftoken') },
-        body: JSON.stringify({ clerk_user_id: user.id, email: email, full_name: [user.firstName, user.lastName].filter(Boolean).join(' ') })
-      }).then(function (r) { return r.json(); }).then(function (j) {
-        if (j.ok) window.location.reload();
-        else document.getElementById('authLoader').hidden = true;
-      });
-    } else if (!sess && authed) {
-      window.location.href = "{% url 'logout' %}";
-    }
-  });
-}
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', drivegoSyncSession);
-else drivegoSyncSession();
-</script>
+<script src="{% static 'js/auth.js' %}"></script>
 <div id="authLoader" class="auth-loader" hidden><span class="spinner"></span>Signing you in…</div>
 {% endif %}
 {% block scripts %}{% endblock %}

@@ -1,0 +1,49 @@
+{% load rental_tags %}
+<div class="trip">
+  <div class="trip-photo">
+    <img src="{{ car.display_image }}" alt="{{ car.brand }} {{ car.model }}" />
+    <span class="trip-tag">{{ car.category }}</span>
+  </div>
+  <div class="trip-body">
+    <h3>{{ car.brand }} {{ car.model }}</h3>
+    <p class="trip-meta">{{ car.seats }} seats · {{ car.transmission }} · {{ car.fuel_type }}</p>
+
+    <div class="trip-line">
+      <div class="trip-stop">
+        <span class="trip-dot"></span>
+        <div><small>Pickup</small>
+          <b data-live="pickup_label">{% if booking %}{{ booking.pickup_datetime|date:"D, d M · h:i A" }}{% else %}{{ pickup|date:"D, d M · h:i A" }}{% endif %}</b>
+          <span>{% if booking and booking.delivery_method == 'HOME_DELIVERY' and booking.delivery_address %}Delivered to {{ booking.delivery_address }}, {{ booking.delivery_city }}{% else %}{{ car.location.name }}{% endif %}</span></div>
+      </div>
+      <div class="trip-stop end">
+        <span class="trip-dot"></span>
+        <div><small>Return</small>
+          <b data-live="drop_label">{% if booking %}{{ booking.dropoff_datetime|date:"D, d M · h:i A" }}{% else %}{{ drop|date:"D, d M · h:i A" }}{% endif %}</b>
+          <span>{{ car.location.name }}</span></div>
+      </div>
+    </div>
+
+    <dl class="trip-price"{% if booking %} data-rental="{{ booking.rental_amount|floatformat:0 }}" data-delivery-fee="{{ DELIVERY_CHARGE }}" data-tax-percent="{{ TAX_PERCENT }}"{% endif %}>
+      {% if booking %}
+      <div><dt>₹{{ car.price_per_day|inr }} × {{ booking.rental_days }} day{{ booking.rental_days|pluralize }}</dt><dd>₹{{ booking.rental_amount|inr }}</dd></div>
+      <div><dt>Delivery</dt><dd data-price="delivery_charge">{% if booking.delivery_charge %}₹{{ booking.delivery_charge|inr }}{% else %}Free{% endif %}</dd></div>
+      <div><dt>Taxes ({{ TAX_PERCENT }}%)</dt><dd data-price="tax_amount">₹{{ booking.tax_amount|inr }}</dd></div>
+      {% elif estimate %}
+      <div><dt>₹{{ car.price_per_day|inr }} × <span data-price="days">{{ estimate.days }}</span> day(s)</dt><dd data-price="rental_amount">₹{{ estimate.rental_amount|inr }}</dd></div>
+      <div><dt>Taxes ({{ TAX_PERCENT }}%)</dt><dd data-price="tax_amount">₹{{ estimate.tax_amount|inr }}</dd></div>
+      {% endif %}
+    </dl>
+    <div class="trip-total">
+      <span>{% if booking %}Total{% else %}Estimated total{% endif %}</span>
+      <b data-price="total_amount">₹{% if booking %}{{ booking.total_amount|inr }}{% else %}{{ estimate.total_amount|inr }}{% endif %}</b>
+    </div>
+    {% if booking and booking.status == 'PENDING' and booking.hold_expires_at %}
+    <p class="trip-hold"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Car reserved for you until {{ booking.hold_expires_at|date:"h:i A" }}</p>
+    {% endif %}
+  </div>
+</div>
+<ul class="co-trust">
+  <li><svg class="ic" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Insured, inspected car</li>
+  <li><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Free cancellation before pickup</li>
+  <li><svg class="ic" viewBox="0 0 24 24"><path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 0 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/></svg>24/7 roadside support</li>
+</ul>

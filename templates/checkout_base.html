@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load static %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/flow.css' %}" />{% endblock %}
+{% block content %}
+<div class="co">
+  <div class="co-top">
+    <a class="co-back" href="{% block back_url %}{% url 'car_detail' car.id %}{% endblock %}"><svg class="ic" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>{% block back_label %}Back to car{% endblock %}</a>
+    {% if booking %}<span class="co-ref">Booking <b>{{ booking.booking_id }}</b></span>{% endif %}
+  </div>
+  {% include "partials/checkout_steps.html" %}
+  <div class="co-grid">
+    <section class="co-main">
+      <header class="co-heading">
+        <span class="co-kicker">Step {% for s in steps %}{% if s.state == 'now' %}{{ s.n }}{% endif %}{% endfor %} of {{ steps|length }}</span>
+        <h1>{% block heading %}{% endblock %}</h1>
+        <p>{% block subheading %}{% endblock %}</p>
+      </header>
+      {% block step %}{% endblock %}
+    </section>
+    <aside class="co-side">
+      {% block side %}{% include "partials/trip_summary.html" %}{% endblock %}
+    </aside>
+  </div>
+</div>
+{% endblock %}

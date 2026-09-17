@@ -1,40 +1,24 @@
-{% extends "base.html" %}
+{% extends "checkout_base.html" %}
 {% block page %}booking{% endblock %}
-{% block title %}DriveGo - Check Availability{% endblock %}
-{% block content %}
-<div class="section flow">
-  <div class="progress">
-    <span class="p-step done"><span class="p-dot">✓</span>1. Car</span><span class="p-arrow">→</span>
-    <span class="p-step now"><span class="p-dot">2</span>2. Dates</span><span class="p-arrow">→</span>
-    <span class="p-step"><span class="p-dot">3</span>3. Verification</span><span class="p-arrow">→</span>
-    <span class="p-step"><span class="p-dot">4</span>4. Delivery</span><span class="p-arrow">→</span>
-    <span class="p-step"><span class="p-dot">5</span>5. Payment</span>
-  </div>
+{% block title %}DriveGo - Choose Dates{% endblock %}
+{% block heading %}When do you need the car?{% endblock %}
+{% block subheading %}Pickup and return are at {{ car.location.name }}. You can switch to home delivery later.{% endblock %}
+{% block step %}
+<form class="co-card" action="{% url 'booking_dates' car.id %}" method="post" data-availability="{% url 'car_availability' car.id %}">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="co-alert is-error">{% for e in form.non_field_errors %}{{ e }} {% endfor %}</div>{% endif %}
+  {% for field in form %}{% if field.errors %}<div class="co-alert is-error">{{ field.label }}: {{ field.errors|striptags }}</div>{% endif %}{% endfor %}
 
-  <h2>Check availability</h2>
-  <p class="muted">Confirm your rental period for the selected car.</p>
+  {% include "partials/availability_panel.html" %}
 
-  <div class="panel bk-car" style="margin-top:14px">
-    <img src="{{ car.display_image }}" alt="{{ car.brand }} {{ car.model }}" />
-    <div><h3>{{ car.brand }} {{ car.model }}</h3><p class="small muted">{{ car.location.name }} · ₹{{ car.price_per_day }}/day</p></div>
+  <div class="co-actions">
+    <a class="btn btn-ghost" href="{% url 'car_detail' car.id %}">Cancel</a>
+    <button class="btn btn-primary" type="submit" data-av-submit{% if not info.available %} disabled{% endif %}><span data-av-cta>{% if info.available %}Reserve &amp; continue{% else %}Pick other dates{% endif %}</span></button>
   </div>
+</form>
 
-  <div class="panel" style="margin-top:14px">
-    <h3>Rental Period</h3>
-    <form action="{% url 'booking_dates' car.id %}" method="post">
-      {% csrf_token %}
-      {% if form.non_field_errors %}<div class="booked-note">{{ form.non_field_errors }}</div>{% endif %}
-      <div class="field"><label>Pickup location</label><div class="pickup-fixed"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> {{ car.location.name }}</div></div>
-      <div class="form-row" style="margin-top:8px">
-        <div class="field"><label>Pickup date</label>{{ form.pickup_date }}{{ form.pickup_date.errors }}</div>
-        <div class="field"><label>Pickup time</label>{{ form.pickup_time }}{{ form.pickup_time.errors }}</div>
-      </div>
-      <div class="form-row" style="margin-top:8px">
-        <div class="field"><label>Drop date</label>{{ form.drop_date }}{{ form.drop_date.errors }}</div>
-        <div class="field"><label>Drop time</label>{{ form.drop_time }}{{ form.drop_time.errors }}</div>
-      </div>
-      <button class="btn btn-primary btn-block" style="margin-top:14px" type="submit">Continue to Verification</button>
-    </form>
-  </div>
-</div>
+<section class="co-card">
+  <h2 class="co-card-title">Availability calendar</h2>
+  {% include "partials/availability_calendar.html" %}
+</section>
 {% endblock %}

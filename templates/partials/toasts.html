@@ -1,0 +1,1 @@
+<div class="toasts" id="toasts" role="status" aria-live="polite">{% for message in messages %}<div class="toast {{ message.tags }}"><span>{{ message }}</span><button type="button" aria-label="Dismiss" onclick="this.parentElement.remove()">✕</button></div>{% endfor %}</div>

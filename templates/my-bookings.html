@@ -1,51 +1,75 @@
 {% extends "base.html" %}
+{% load static rental_tags %}
 {% block page %}bookings{% endblock %}
-{% block title %}DriveGo - Account{% endblock %}
+{% block title %}DriveGo - My Bookings{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/flow.css' %}" />{% endblock %}
 {% block content %}
-<div class="section">
-  <span class="eyebrow">ACCOUNT</span>
-  <h2>My Bookings</h2>
-  <p class="muted">Your profile and bookings in one place.</p>
+<div class="mb">
+  <header class="mb-head">
+    <div class="mb-user">
+      <span class="mb-avatar">{% if customer.profile_image_url %}<img src="{{ customer.profile_image_url }}" alt="" />{% else %}{{ customer.full_name|default:customer.email|default:"D"|slice:":1"|upper }}{% endif %}</span>
+      <div><h1>My bookings</h1><p>{{ customer.full_name|default:"" }}{% if customer.full_name and customer.email %} · {% endif %}{{ customer.email }}</p></div>
+    </div>
+    <div class="mb-head-actions">
+      <a class="btn btn-primary" href="{% url 'cars' %}">Book a car</a>
+      <a class="btn btn-ghost" href="{% url 'logout' %}">Log out</a>
+    </div>
+  </header>
 
-  <div class="panel dash-profile">
-    <div class="dash-avatar">{% if customer.profile_image_url %}<img src="{{ customer.profile_image_url }}" alt="{{ customer }}" />{% else %}{{ customer.full_name|default:customer.email|default:"D"|slice:":1"|upper }}{% endif %}</div>
-    <div class="dash-id"><b>{{ customer.full_name|default:"Account" }}</b><span>{{ customer.email|default:"" }}</span></div>
-    <a class="btn btn-ghost dash-logout" href="{% url 'logout' %}">Logout</a>
+  <div class="mb-stats">
+    <div><b>{{ counts.upcoming }}</b><span>Upcoming</span></div>
+    <div><b>{{ counts.completed }}</b><span>Completed</span></div>
+    <div><b>{{ counts.cancelled }}</b><span>Cancelled</span></div>
+    <div><b>{{ total_trips }}</b><span>Total trips</span></div>
   </div>
 
-  <div class="stat-grid">
-    <div class="stat stat-up"><span>Upcoming</span><b>{{ counts.upcoming }}</b></div>
-    <div class="stat stat-done"><span>Completed</span><b>{{ counts.completed }}</b></div>
-    <div class="stat stat-gone"><span>Cancelled</span><b>{{ counts.cancelled }}</b></div>
-    <div class="stat stat-total"><span>Total trips</span><b>{{ total_trips }}</b></div>
-  </div>
+  <nav class="seg" aria-label="Booking filters">
+    <a class="{% if tab == 'upcoming' %}on{% endif %}" href="{% url 'my_bookings' %}?tab=upcoming">Upcoming <span>{{ counts.upcoming }}</span></a>
+    <a class="{% if tab == 'completed' %}on{% endif %}" href="{% url 'my_bookings' %}?tab=completed">Completed <span>{{ counts.completed }}</span></a>
+    <a class="{% if tab == 'cancelled' %}on{% endif %}" href="{% url 'my_bookings' %}?tab=cancelled">Cancelled <span>{{ counts.cancelled }}</span></a>
+  </nav>
 
-  <div class="tabs">
-    <a class="tab{% if tab == 'upcoming' %} on{% endif %}" href="{% url 'my_bookings' %}?tab=upcoming">Upcoming ({{ counts.upcoming }})</a>
-    <a class="tab{% if tab == 'completed' %} on{% endif %}" href="{% url 'my_bookings' %}?tab=completed">Completed ({{ counts.completed }})</a>
-    <a class="tab{% if tab == 'cancelled' %} on{% endif %}" href="{% url 'my_bookings' %}?tab=cancelled">Cancelled ({{ counts.cancelled }})</a>
-  </div>
-
-  <div class="car-grid cols-2">
+  <div class="mb-list">
     {% for b in bookings %}
-    <div class="card">
-      {% if b.car.display_image %}<img src="{{ b.car.display_image }}" alt="{{ b.car }}"/>{% endif %}
-      <div class="card-body">
-        {% if b.status == 'CONFIRMED' or b.status == 'ACTIVE' or b.status == 'PENDING' %}<span class="badge ok">{{ b.get_status_display }}</span>{% elif b.status == 'PENDING_VERIFICATION' %}<span class="badge warn">{{ b.get_status_display }}</span>{% elif b.status == 'COMPLETED' %}<span class="badge info">{{ b.get_status_display }}</span>{% else %}<span class="badge no">{{ b.get_status_display }}</span>{% endif %}
-        <h3>{{ b.car.brand }} {{ b.car.model }}</h3>
-        <p class="small muted">{{ b.booking_id }} · {{ b.pickup_location.name }}<br>Pickup: {{ b.pickup_datetime|date:"d M, h:i A" }} - Drop: {{ b.dropoff_datetime|date:"d M, h:i A" }}<br>Payment: {{ b.get_payment_status_display }}</p>
-        <div class="price-row"><b>₹{{ b.total_amount }}</b><span class="price-actions">
-          <a class="btn btn-ghost" href="{% url 'confirmation' b.booking_id %}">View</a>
-          {% if b.status == 'PENDING' or b.status == 'PENDING_VERIFICATION' or b.status == 'CONFIRMED' or b.status == 'ACTIVE' %}
-          <form action="{% url 'cancel_booking' b.booking_id %}" method="post" style="display:inline;margin:0">{% csrf_token %}
-            <button class="btn btn-danger" type="submit" onclick="return confirm('Cancel this booking? Paid amounts will be refunded.')">Cancel</button>
+    <article class="mb-card">
+      <img class="mb-photo" src="{{ b.car.display_image }}" alt="{{ b.car }}" loading="lazy" />
+      <div class="mb-info">
+        <div class="mb-title">
+          <h2>{{ b.car.brand }} {{ b.car.model }}</h2>
+          <span class="pill tone-{{ b.status|tone }}">{{ b.status|customer_status }}</span>
+        </div>
+        <p class="mb-id">{{ b.booking_id }} · {{ b.pickup_location.name }}{% if b.delivery_method == 'HOME_DELIVERY' %} · Home delivery{% endif %}</p>
+        <div class="mb-dates">
+          <div><small>Pickup</small><b>{{ b.pickup_datetime|date:"D d M, h:i A" }}</b></div>
+          <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          <div><small>Return</small><b>{{ b.dropoff_datetime|date:"D d M, h:i A" }}</b></div>
+        </div>
+        {% if b.status == 'PENDING' %}<p class="mb-note">Reserved until {{ b.hold_expires_at|date:"h:i A" }} — finish checkout to keep it.</p>
+        {% elif b.checkout_step == 'verification' and b.is_paid %}<p class="mb-note is-error">A document was rejected. Upload a new copy to confirm your trip.</p>
+        {% elif b.admin_note %}<p class="mb-note">{{ b.admin_note }}</p>{% endif %}
+      </div>
+      <div class="mb-side">
+        <div class="mb-amount"><b>₹{{ b.total_amount|inr }}</b><span>{{ b.get_payment_status_display }}</span></div>
+        <div class="mb-actions">
+          {% if b.resume_url and not b.is_paid %}<a class="btn btn-primary btn-sm" href="{{ b.resume_url }}">Continue booking</a>
+          {% elif b.resume_url %}<a class="btn btn-ghost btn-sm" href="{{ b.resume_url }}">{% if b.checkout_step == 'verification' %}Re-upload{% else %}View{% endif %}</a>{% endif %}
+          {% if b.customer_can_cancel %}
+          <form action="{% url 'cancel_booking' b.booking_id %}" method="post">{% csrf_token %}
+            <input type="hidden" name="tab" value="{{ tab }}" />
+            <button class="btn btn-danger btn-sm" type="submit" data-confirm="Cancel booking {{ b.booking_id }}?{% if b.is_paid %} ₹{{ b.total_amount|inr }} will be refunded.{% endif %}">Cancel</button>
           </form>
           {% endif %}
-        </span></div>
+          {% if tab != 'upcoming' %}<a class="btn btn-ghost btn-sm" href="{% url 'car_detail' b.car_id %}">Book again</a>{% endif %}
+        </div>
       </div>
-    </div>
+    </article>
     {% empty %}
-    <div class="empty-state"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><b>No {{ tab }} bookings</b><span class="small">Your trips will appear here.</span></div>
+    <div class="mb-empty">
+      <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      <b>No {{ tab }} bookings</b>
+      <span>{% if tab == 'upcoming' %}Find a car and your next trip will show up here.{% else %}Nothing here yet.{% endif %}</span>
+      {% if tab == 'upcoming' %}<a class="btn btn-primary" href="{% url 'cars' %}">Browse cars</a>{% endif %}
+    </div>
     {% endfor %}
   </div>
 </div>

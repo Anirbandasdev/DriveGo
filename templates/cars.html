@@ -1,71 +1,107 @@
 {% extends "base.html" %}
+{% load rental_tags %}
 {% block page %}cars{% endblock %}
 {% block title %}DriveGo - Search Cars{% endblock %}
 {% block content %}
-<section class="section page-head">
-  <span class="eyebrow">SEARCH RESULTS</span>
-  <h2>Cars available in {{ params.location|default:"all locations" }}</h2>
-  {% if dated %}<p class="muted">Pickup {{ pickup|date:"d M, h:i A" }} - Drop {{ drop|date:"d M, h:i A" }} · Live availability</p>{% else %}<p class="muted">Select dates to check live availability for your trip.</p>{% endif %}
-</section>
+<div class="cl">
+  <header class="cl-head">
+    <h1>{% if params.location %}Cars in {{ params.location }}{% else %}Browse all cars{% endif %}</h1>
+    <p>{{ pickup|date:"D d M, h:i A" }} → {{ drop|date:"D d M, h:i A" }}{% if not dated %} <span class="cl-hint">(sample dates — change them below)</span>{% endif %}</p>
+  </header>
 
-<form class="search-card search-compact" action="{% url 'cars' %}" method="get">
-  <div class="search-grid">
-    <div class="field"><label for="sLoc"><svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Pickup Location</label>
-      <select id="sLoc" name="location">
-        <option value="">All locations</option>
-        {% for loc in locations %}<option value="{{ loc.name }}"{% if params.location == loc.name %} selected{% endif %}>{{ loc.name }}</option>{% endfor %}
-      </select></div>
-    <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Pickup Date</label><input name="pickup_date" type="date" value="{{ params.pickup_date|default:default_pickup_date }}" /></div>
-    <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Pickup Time</label><input name="pickup_time" type="time" value="{{ params.pickup_time|default:'10:00' }}" /></div>
-    <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Drop-off Date</label><input name="drop_date" type="date" value="{{ params.drop_date|default:default_drop_date }}" /></div>
-    <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Drop-off Time</label><input name="drop_time" type="time" value="{{ params.drop_time|default:'18:00' }}" /></div>
-    <div><button class="btn btn-primary" type="submit">Search Cars <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button></div>
+  <div class="cl-search">
+    {% include "partials/search_bar.html" with variant="compact" selected=params.location all_locations=True %}
   </div>
-</form>
 
-<div class="two-col">
-  <aside class="panel filter-panel">
-    <h3><svg class="ic" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>Filters</h3>
-    <form id="filterForm" method="get" action="{% url 'cars' %}">
-      <input type="hidden" name="location" value="{{ params.location }}" />
-      <input type="hidden" name="pickup_date" value="{{ params.pickup_date }}" />
-      <input type="hidden" name="pickup_time" value="{{ params.pickup_time }}" />
-      <input type="hidden" name="drop_date" value="{{ params.drop_date }}" />
-      <input type="hidden" name="drop_time" value="{{ params.drop_time }}" />
-      <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></svg>Max price/day: <span id="priceVal">₹{{ params.max_price|default:"3000" }}</span></label>
-        <input id="fPrice" name="max_price" type="range" min="1000" max="3000" step="100" value="{{ params.max_price|default:'3000' }}" /></div>
-      <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>Car type</label>
-        <select id="fType" name="category"><option value="All">All</option><option{% if params.category == 'SUV' %} selected{% endif %}>SUV</option><option{% if params.category == 'Hatchback' %} selected{% endif %}>Hatchback</option><option{% if params.category == 'Sedan' %} selected{% endif %}>Sedan</option></select></div>
-      <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Seats</label>
-        <select id="fSeats" name="seats"><option value="Any">Any</option><option{% if params.seats == '5' %} selected{% endif %}>5</option><option{% if params.seats == '7' %} selected{% endif %}>7</option></select></div>
-      <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>Transmission</label>
-        <select id="fTrans" name="transmission"><option value="Any">Any</option><option{% if params.transmission == 'Automatic' %} selected{% endif %}>Automatic</option><option{% if params.transmission == 'Manual' %} selected{% endif %}>Manual</option></select></div>
-      <div class="field"><label><svg class="ic" viewBox="0 0 24 24"><line x1="3" x2="15" y1="22" y2="22"/><line x1="4" x2="14" y1="9" y2="9"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9.83a2 2 0 0 0-.59-1.42L18 5"/></svg>Fuel type</label>
-        <select id="fFuel" name="fuel_type"><option value="Any">Any</option><option{% if params.fuel_type == 'Petrol' %} selected{% endif %}>Petrol</option><option{% if params.fuel_type == 'Diesel' %} selected{% endif %}>Diesel</option></select></div>
-    </form>
-  </aside>
-  <div>
-    <div class="results-bar">
-      <p class="muted small"><b>{{ results|length }}</b> cars found</p>
-      <div class="field sort-field"><label for="fSort">Sort</label>
-        <select id="fSort" form="filterForm" name="sort"><option value="Recommended">Recommended</option><option value="Low"{% if params.sort == 'Low' %} selected{% endif %}>Price Low - High</option><option value="High"{% if params.sort == 'High' %} selected{% endif %}>Price High - Low</option></select></div>
+  <div class="cl-toolbar">
+    <p class="cl-count"><b>{{ available_count }}</b> of {{ results|length }} car{{ results|length|pluralize }} free for your dates</p>
+    <div class="cl-tools">
+      <button class="cl-filter-btn" type="button" data-filters-open aria-controls="filterPanel" aria-expanded="false">
+        <svg class="ic" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
+        Filters{% if active_filters %} <span class="cl-dot">{{ active_filters }}</span>{% endif %}
+      </button>
+      <label class="cl-sort"><span class="sr-only">Sort by</span>
+        <select form="filterForm" name="sort" data-autosubmit>
+          <option value="Recommended">Recommended</option>
+          <option value="Low"{% if params.sort == 'Low' %} selected{% endif %}>Price: low to high</option>
+          <option value="High"{% if params.sort == 'High' %} selected{% endif %}>Price: high to low</option>
+        </select>
+      </label>
     </div>
-    <div class="car-grid cols-2">
-      {% for item in results %}{% include "partials/car_card.html" with car=item.car status=item.status booked_slot=item.booked_slot next_free=item.next_free %}{% empty %}
-      <div class="empty-state"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><b>No cars found</b><span class="small">Try widening the price range or clearing a filter.</span></div>
+  </div>
+
+  <div class="cl-layout">
+    <aside class="cl-filters" id="filterPanel" aria-label="Filters">
+      <form id="filterForm" method="get" action="{% url 'cars' %}">
+        <div class="cl-filters-head">
+          <h2>Filters</h2>
+          <button class="cl-close" type="button" data-filters-close aria-label="Close filters">✕</button>
+        </div>
+        <input type="hidden" name="location" value="{{ params.location|default:'' }}" />
+        <input type="hidden" name="pickup_date" value="{{ window.pickup_date }}" />
+        <input type="hidden" name="pickup_time" value="{{ window.pickup_time }}" />
+        <input type="hidden" name="drop_date" value="{{ window.drop_date }}" />
+        <input type="hidden" name="drop_time" value="{{ window.drop_time }}" />
+
+        <label class="cl-switch">
+          <input type="checkbox" name="available_only" value="1"{% if params.available_only == '1' %} checked{% endif %} data-autosubmit />
+          <span>Only cars free for my dates</span>
+        </label>
+
+        <fieldset class="cl-group">
+          <legend>Max price per day <output id="priceVal">₹{{ params.max_price|default:max_price_default|inr }}</output></legend>
+          <input id="fPrice" name="max_price" type="range" min="500" max="{{ max_price_default }}" step="100" value="{{ params.max_price|default:max_price_default }}" data-autosubmit />
+        </fieldset>
+
+        <fieldset class="cl-group">
+          <legend>Car type</legend>
+          <div class="cl-chips">
+            <label><input type="radio" name="category" value="All"{% if not params.category or params.category == 'All' %} checked{% endif %} data-autosubmit /><span>All</span></label>
+            {% for c in categories %}<label><input type="radio" name="category" value="{{ c }}"{% if params.category == c %} checked{% endif %} data-autosubmit /><span>{{ c }}</span></label>{% endfor %}
+          </div>
+        </fieldset>
+
+        <fieldset class="cl-group">
+          <legend>Seats</legend>
+          <div class="cl-chips">
+            {% for v, label in seat_options %}<label><input type="radio" name="seats" value="{{ v }}"{% if params.seats|default:'Any' == v %} checked{% endif %} data-autosubmit /><span>{{ label }}</span></label>{% endfor %}
+          </div>
+        </fieldset>
+
+        <fieldset class="cl-group">
+          <legend>Transmission</legend>
+          <div class="cl-chips">
+            {% for v in "Any,Automatic,Manual"|split_csv %}<label><input type="radio" name="transmission" value="{{ v }}"{% if params.transmission|default:'Any' == v %} checked{% endif %} data-autosubmit /><span>{{ v }}</span></label>{% endfor %}
+          </div>
+        </fieldset>
+
+        <fieldset class="cl-group">
+          <legend>Fuel</legend>
+          <div class="cl-chips">
+            {% for v in "Any,Petrol,Diesel"|split_csv %}<label><input type="radio" name="fuel_type" value="{{ v }}"{% if params.fuel_type|default:'Any' == v %} checked{% endif %} data-autosubmit /><span>{{ v }}</span></label>{% endfor %}
+          </div>
+        </fieldset>
+
+        <div class="cl-filters-foot">
+          <a class="btn btn-ghost" href="{% url 'cars' %}?location={{ params.location|default:''|urlencode }}&amp;pickup_date={{ window.pickup_date }}&amp;pickup_time={{ window.pickup_time }}&amp;drop_date={{ window.drop_date }}&amp;drop_time={{ window.drop_time }}">Clear all</a>
+          <button class="btn btn-primary" type="submit">Show cars</button>
+        </div>
+      </form>
+    </aside>
+    <div class="cl-scrim" data-filters-close hidden></div>
+
+    <div class="cl-results">
+      {% for item in results %}
+      {% include "partials/car_card.html" with car=item.car info=item.info qs=item.qs estimate=item.estimate %}
+      {% empty %}
+      <div class="cl-empty">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <b>No cars match these filters</b>
+        <span>Try another location, a higher price limit, or fewer filters.</span>
+        <a class="btn btn-ghost btn-sm" href="{% url 'cars' %}">Reset search</a>
+      </div>
       {% endfor %}
     </div>
   </div>
 </div>
-{% endblock %}
-{% block scripts %}
-<script>
-document.getElementById('fPrice').addEventListener('input', function () {
-  document.getElementById('priceVal').textContent = '₹' + Number(this.value).toLocaleString('en-IN');
-});
-document.querySelectorAll('#filterForm select, #filterForm input').forEach(function (el) {
-  el.addEventListener('change', function () { document.getElementById('filterForm').submit(); });
-});
-document.getElementById('fSort').addEventListener('change', function () { document.getElementById('filterForm').submit(); });
-</script>
 {% endblock %}
