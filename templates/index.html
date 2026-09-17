@@ -46,7 +46,7 @@
   <div class="hs-types">
     {% for t in car_types %}
     <a class="hs-type" href="{% url 'cars' %}?category={{ t.name|urlencode }}">
-      <img src="{{ t.image }}" alt="" loading="lazy" />
+      <img src="{{ t.image|thumb:500 }}" alt="" loading="lazy" />
       <span class="hs-type-body"><b>{{ t.name }}</b><small>{{ t.count }} car{{ t.count|pluralize }} · from ₹{{ t.from_price|inr }}/day</small></span>
       <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
     </a>

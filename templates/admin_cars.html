@@ -24,7 +24,7 @@
       {% for row in rows %}
       {% with car=row.car %}
       <tr>
-        <td><div class="car-cell"><img src="{{ car.display_image }}" alt="" loading="lazy" /><span><b>{{ car }}</b><small>{{ car.registration_number }} · {{ car.category }} · {{ car.seats }} seats</small></span></div></td>
+        <td><div class="car-cell"><img src="{{ car.display_image|thumb:120 }}" alt="" loading="lazy" /><span><b>{{ car }}</b><small>{{ car.registration_number }} · {{ car.category }} · {{ car.seats }} seats</small></span></div></td>
         <td>{{ car.location.name }}</td>
         <td class="num">₹{{ car.price_per_day|inr }}</td>
         <td>{% if row.current %}<a class="row-link" href="{% url 'admin_booking_detail' row.current.booking_id %}">{{ row.current.get_status_display }}</a><small>until {{ row.current.dropoff_datetime|date:"d M, h:i A" }}</small>{% else %}<span class="muted-note">Idle</span>{% endif %}</td>

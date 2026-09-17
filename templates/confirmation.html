@@ -36,7 +36,7 @@
     <section class="co-card">
       <h2 class="co-card-title">Trip details</h2>
       <div class="done-car">
-        <img src="{{ car.display_image }}" alt="{{ car.brand }} {{ car.model }}" />
+        <img src="{{ car.display_image|thumb:250 }}" alt="{{ car.brand }} {{ car.model }}" />
         <div><b>{{ car.brand }} {{ car.model }}</b><span>{{ car.seats }} seats · {{ car.transmission }} · {{ car.fuel_type }}</span></div>
       </div>
       <div class="trip-line">

@@ -24,6 +24,9 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax"
+# The session only holds the Clerk user id and role, so keep it in a signed cookie
+# instead of reading the database on every request.
+SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 
 INSTALLED_APPS = [
@@ -65,7 +68,11 @@ WSGI_APPLICATION = "drivego.wsgi.application"
 
 _database_url = os.environ.get("DATABASE_URL", "")
 if _database_url and dj_database_url:
-    DATABASES = {"default": dj_database_url.parse(_database_url, conn_max_age=0)}
+    # Reuse the connection while a serverless instance stays warm: opening a new
+    # TLS connection to Postgres costs more than most of our queries.
+    DATABASES = {"default": dj_database_url.parse(_database_url, conn_max_age=60, conn_health_checks=True)}
+    # Supabase's transaction pooler (port 6543) does not support server-side cursors.
+    DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
 else:
     DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 
@@ -77,6 +84,11 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    # Adds ?v=<content hash> to static URLs so browsers can cache them for a year.
+    "staticfiles": {"BACKEND": "rental.storage.VersionedStaticFilesStorage"},
+}
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 

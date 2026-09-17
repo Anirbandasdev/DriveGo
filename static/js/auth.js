@@ -51,14 +51,25 @@
     return parts.length === 2 ? parts.pop().split(";").shift() : "";
   }
 
-  function waitForClerk(timeoutMs) {
+  /* Clerk's script is large, so it is only added to the page when something needs it. */
+  function loadScript() {
     return new Promise(function (resolve, reject) {
-      var started = Date.now();
-      (function poll() {
-        if (window.Clerk) return resolve(window.Clerk);
-        if (Date.now() - started > timeoutMs) return reject(new Error("Clerk failed to load"));
-        setTimeout(poll, 100);
-      })();
+      if (window.Clerk) return resolve(window.Clerk);
+      var script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      script.setAttribute("data-clerk-publishable-key", cfg.publishableKey);
+      script.onload = function () { window.Clerk ? resolve(window.Clerk) : reject(new Error("Clerk failed to load")); };
+      script.onerror = function () { reject(new Error("Clerk failed to load")); };
+      document.head.appendChild(script);
+    });
+  }
+
+  /* Clerk keeps a __client_uat cookie on our domain: "0" or missing means nobody is signed in. */
+  function mayHaveClerkSession() {
+    return document.cookie.split("; ").some(function (pair) {
+      return pair.indexOf("__client_uat") === 0 && pair.split("=")[1] !== "0";
     });
   }
 
@@ -66,7 +77,7 @@
   function load(next) {
     if (!loading) {
       var home = absolute(withNext(cfg.loginUrl, next));
-      loading = waitForClerk(15000).then(function (clerk) {
+      loading = loadScript().then(function (clerk) {
         return clerk.load({
           appearance: APPEARANCE,
           signInUrl: absolute(cfg.loginUrl),
@@ -100,6 +111,8 @@
     var body = document.body;
     if (body.hasAttribute("data-auth-page")) return;
     var authed = body.hasAttribute("data-authed");
+    // Signed-out visitors without a Clerk session never download Clerk.
+    if (!authed && !mayHaveClerkSession()) return;
     load().then(function (clerk) {
       var loader = document.getElementById("authLoader");
       if (clerk.session && !authed) {
@@ -117,6 +130,8 @@
 
   window.DriveGoAuth = { load: load, syncServer: syncServer, appearance: APPEARANCE, withNext: withNext, config: cfg };
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", autoSync);
-  else autoSync();
+  // Check the session after the page has loaded so it never slows the first paint.
+  function whenIdle() { (window.requestIdleCallback || setTimeout)(autoSync); }
+  if (document.readyState === "complete") whenIdle();
+  else window.addEventListener("load", whenIdle);
 })();

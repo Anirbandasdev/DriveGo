@@ -8,7 +8,7 @@ from django.utils import timezone
 
 
 def _blocking_q(car, pickup, drop):
-    """Bookings that block ``car`` for the [pickup, drop] window.
+    """Bookings that block ``car`` (a car or an iterable of car ids) for the [pickup, drop] window.
 
     Unpaid PENDING holds only block within ``BOOKING_HOLD_MINUTES`` of creation,
     so abandoned or failed checkouts release the car automatically instead of
@@ -17,7 +17,8 @@ def _blocking_q(car, pickup, drop):
     cutoff = timezone.now() - timedelta(minutes=getattr(settings, "BOOKING_HOLD_MINUTES", 60))
     statuses = [Booking.Status.PENDING, Booking.Status.PENDING_VERIFICATION, Booking.Status.CONFIRMED, Booking.Status.ACTIVE]
     return (
-        Q(car=car, status__in=statuses, pickup_datetime__lt=drop, dropoff_datetime__gt=pickup)
+        (Q(car=car) if isinstance(car, models.Model) else Q(car_id__in=list(car)))
+        & Q(status__in=statuses, pickup_datetime__lt=drop, dropoff_datetime__gt=pickup)
         & (~Q(status=Booking.Status.PENDING) | Q(created_at__gte=cutoff))
     )
 
@@ -96,29 +97,40 @@ class Car(models.Model):
     def busy_periods(self, start, end, exclude_ids=None):
         """Merged, sorted ``[(from, to)]`` intervals inside ``[start, end]`` when the
         car cannot be booked (bookings that hold it plus admin blocks)."""
-        intervals = list(self.blocking_bookings(start, end, exclude_ids).values_list("pickup_datetime", "dropoff_datetime"))
-        intervals += list(self.blocked_window(start, end).values_list("start_datetime", "end_datetime"))
-        merged = []
-        for s, e in sorted(intervals):
-            if merged and s <= merged[-1][1]:
-                merged[-1][1] = max(merged[-1][1], e)
-            else:
-                merged.append([s, e])
-        return [(s, e) for s, e in merged]
+        return Car.busy_periods_for([self], start, end, exclude_ids)[self.pk]
 
-    def next_available_start(self, pickup, drop, exclude_ids=None, horizon_days=180):
-        """Earliest pickup at or after ``pickup`` where a trip of the same length fits.
+    @staticmethod
+    def busy_periods_for(cars, start, end, exclude_ids=None):
+        """``{car_id: merged busy periods}`` for many cars using two queries in total."""
+        car_ids = [car.pk for car in cars]
+        by_car = {car_id: [] for car_id in car_ids}
+        bookings = Booking.objects.filter(_blocking_q(car_ids, start, end))
+        if exclude_ids:
+            bookings = bookings.exclude(pk__in=exclude_ids)
+        for car_id, s, e in bookings.values_list("car_id", "pickup_datetime", "dropoff_datetime"):
+            by_car[car_id].append((s, e))
+        blocks = CarBlock.objects.filter(car_id__in=car_ids, start_datetime__lt=end, end_datetime__gt=start)
+        for car_id, s, e in blocks.values_list("car_id", "start_datetime", "end_datetime"):
+            by_car[car_id].append((s, e))
+        return {car_id: _merge_periods(periods) for car_id, periods in by_car.items()}
 
-        Walks the merged busy periods, so back-to-back bookings and admin blocks
-        are skipped over instead of suggesting a slot that still clashes.
-        Returns ``None`` when the car is out of service or nothing fits in the horizon.
+    @staticmethod
+    def search_window(pickup, drop, horizon_days=180):
+        """The period to load busy times for, so clashes and the next free slot can both be found."""
+        start = min(pickup, timezone.now())
+        return start, max(pickup, timezone.now()) + timedelta(days=horizon_days) + (drop - pickup)
+
+    @staticmethod
+    def next_start_in(periods, pickup, drop, horizon_days=180):
+        """Walk merged busy ``periods`` to find where a trip of the same length fits.
+
+        Back-to-back bookings and admin blocks are skipped over instead of suggesting
+        a slot that still clashes.
         """
-        if self.status != "AVAILABLE":
-            return None
         duration = drop - pickup
         candidate = max(pickup, timezone.now())
         limit = candidate + timedelta(days=horizon_days)
-        for s, e in self.busy_periods(candidate, limit + duration, exclude_ids):
+        for s, e in periods:
             if s >= candidate + duration:
                 break
             candidate = max(candidate, e)
@@ -126,9 +138,24 @@ class Car(models.Model):
         extra = (30 - candidate.minute % 30) % 30
         if extra or candidate.second or candidate.microsecond:
             candidate = (candidate + timedelta(minutes=extra or 30)).replace(second=0, microsecond=0)
-        if candidate > limit:
+        if candidate > limit or overlapping(periods, candidate, candidate + duration):
             return None
-        return candidate if self.is_available_for(candidate, candidate + duration, exclude_ids) else None
+        return candidate
+
+
+def _merge_periods(intervals):
+    merged = []
+    for s, e in sorted(intervals):
+        if merged and s <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], e)
+        else:
+            merged.append([s, e])
+    return [(s, e) for s, e in merged]
+
+
+def overlapping(periods, start, end):
+    """The busy periods that overlap ``[start, end]``."""
+    return [(s, e) for s, e in periods if s < end and e > start]
 
 
 class Customer(models.Model):

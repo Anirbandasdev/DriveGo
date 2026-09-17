@@ -8,6 +8,7 @@ from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from .models import Booking, Car, CarBlock, Customer, Document, Location, SiteSetting
+from .views import availability_for
 
 
 class BookingLogicTests(TestCase):
@@ -95,6 +96,7 @@ class BookingLogicTests(TestCase):
         session = client.session
         session["clerk_user_id"] = "user_test_1"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         response = client.get("/my-bookings/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "DG-TEST-0001")
@@ -112,6 +114,7 @@ class AdminAccessTests(TestCase):
         session["clerk_user_id"] = clerk_user_id
         session["role"] = role
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def test_normal_user_cannot_open_dashboard(self):
@@ -162,6 +165,7 @@ class BookingGuardTests(TestCase):
         session["clerk_user_id"] = "user_guard"
         session["role"] = "CUSTOMER"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def test_unpaid_confirmation_redirects_to_payment(self):
@@ -170,12 +174,13 @@ class BookingGuardTests(TestCase):
         self.assertIn("/payment/DG-GUARD-1/", response["Location"])
 
     def test_stale_session_role_still_enforces_db_role(self):
-        admin = Customer.objects.create(clerk_user_id="user_fresh_admin", email="fa@example.com", role="ADMIN")
+        Customer.objects.create(clerk_user_id="user_fresh_admin", email="fa@example.com", role="ADMIN")
         client = Client()
         session = client.session
         session["clerk_user_id"] = "user_fresh_admin"
         session["role"] = "CUSTOMER"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         self.assertEqual(client.get("/dashboard/").status_code, 200)
 
     def test_double_verify_stays_paid(self):
@@ -204,6 +209,7 @@ class DemoModeTests(TestCase):
         session["clerk_user_id"] = clerk_user_id
         session["role"] = role
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def test_toggle_requires_admin(self):
@@ -330,6 +336,7 @@ class PaymentGuardTests(TestCase):
         session["clerk_user_id"] = "user_pay"
         session["role"] = "CUSTOMER"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def make(self, booking_id, status=Booking.Status.CONFIRMED, pay=Booking.PaymentStatus.PAID):
@@ -392,6 +399,7 @@ class CancelBookingTests(TestCase):
         session["clerk_user_id"] = user_id
         session["role"] = "CUSTOMER"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def make(self, booking_id, status=Booking.Status.CONFIRMED, pay=Booking.PaymentStatus.PAID, user_id="user_cancel"):
@@ -451,6 +459,7 @@ class OpenRedirectTests(TestCase):
         session = client.session
         session["clerk_user_id"] = "user_redir"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         response = client.get("/login/", {"next": "https://evil.example.com/steal"})
         self.assertEqual(response.status_code, 302)
         self.assertNotIn("evil.example.com", response["Location"])
@@ -477,24 +486,25 @@ class CarBlockTests(TestCase):
         self.assertFalse(self.car.is_available_for(self.now + timedelta(days=1, hours=1), self.now + timedelta(days=2)))
         self.assertTrue(self.car.is_available_for(self.now + timedelta(days=5), self.now + timedelta(days=6)))
 
-    def test_block_is_skipped_by_next_available_start(self):
+    def test_block_is_skipped_by_suggested_start(self):
         CarBlock.objects.create(
             car=self.car,
             start_datetime=self.now + timedelta(days=2),
             end_datetime=self.now + timedelta(days=4),
         )
         pickup = self.now + timedelta(days=3)
-        nxt = self.car.next_available_start(pickup, pickup + timedelta(days=1))
+        nxt = availability_for(self.car, pickup, pickup + timedelta(days=1))["suggestion"]["pickup"]
         self.assertGreaterEqual(nxt, self.now + timedelta(days=4))
         self.assertTrue(self.car.is_available_for(nxt, nxt + timedelta(days=1)))
 
     def test_admin_can_add_block(self):
-        admin = Customer.objects.create(clerk_user_id="user_ablk", email="blk@example.com", role="ADMIN")
+        Customer.objects.create(clerk_user_id="user_ablk", email="blk@example.com", role="ADMIN")
         client = Client()
         session = client.session
         session["clerk_user_id"] = "user_ablk"
         session["role"] = "ADMIN"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         response = client.post("/dashboard/blocks/add/", {
             "car_id": self.car.pk,
             "start_datetime": "2099-01-01T10:00",
@@ -524,6 +534,7 @@ class AdminControlsTests(TestCase):
         session["clerk_user_id"] = "user_admin_ctl" if admin else "user_ctl"
         session["role"] = "ADMIN" if admin else "CUSTOMER"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def make(self, bid, status=Booking.Status.PENDING_VERIFICATION, pay=Booking.PaymentStatus.PAID):
@@ -641,6 +652,7 @@ class ExpiredPendingTests(TestCase):
         session["clerk_user_id"] = "user_test"
         session["role"] = "CUSTOMER"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def make_pending_booking(self, minutes_ago):
@@ -675,7 +687,6 @@ class ExpiredPendingTests(TestCase):
 
 class ConfirmationEdgeCaseTests(TestCase):
     def setUp(self):
-        from django.conf import settings as _s
         self.loc = Location.objects.create(name="Test", address="Addr", city="Kolkata")
         self.car = Car.objects.create(
             location=self.loc, category="SUV", brand="Toyota", model="Test",
@@ -691,6 +702,7 @@ class ConfirmationEdgeCaseTests(TestCase):
         session["clerk_user_id"] = "user_test"
         session["role"] = "CUSTOMER"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def test_cancelled_paid_booking_redirects_from_confirmation(self):
@@ -743,6 +755,7 @@ class CancelBookingPreserveTabTests(TestCase):
         session["clerk_user_id"] = "user_test"
         session["role"] = "CUSTOMER"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def test_cancel_preserves_upcoming_tab(self):
@@ -759,7 +772,7 @@ class CancelBookingPreserveTabTests(TestCase):
         response = client.post(
             f"/bookings/{booking.booking_id}/cancel/",
             data={"tab": "upcoming"},
-            HTTP_REFERER=f"/my-bookings/?tab=upcoming",
+            HTTP_REFERER="/my-bookings/?tab=upcoming",
         )
         self.assertEqual(response.status_code, 302)
         self.assertIn("/my-bookings/?tab=upcoming", response["Location"])
@@ -818,7 +831,6 @@ class CleanupCommandTests(TestCase):
 
 class AdminBookingsFilterTests(TestCase):
     def setUp(self):
-        from django.conf import settings as _s
         self.loc = Location.objects.create(name="Test", address="Addr", city="Kolkata")
         self.car = Car.objects.create(
             location=self.loc, category="SUV", brand="Toyota", model="Test",
@@ -837,6 +849,7 @@ class AdminBookingsFilterTests(TestCase):
         session["clerk_user_id"] = "admin_test"
         session["role"] = "ADMIN"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def test_admin_bookings_excludes_cancelled_by_default(self):
@@ -903,6 +916,7 @@ class RegressionFixTests(TestCase):
         session["clerk_user_id"] = "user_reg"
         session["role"] = "CUSTOMER"
         session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
         return client
 
     def make(self, booking_id):
@@ -999,6 +1013,7 @@ def _login(user_id):
     session = client.session
     session["clerk_user_id"] = user_id
     session.save()
+    client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key  # signed-cookie sessions
     return client
 
 
@@ -1086,7 +1101,7 @@ class BookedCarOtherDatesTests(FlowFixtureMixin, TestCase):
         self.assertEqual(Client().get(f"/cars/{self.car.pk}/availability/", self.dates(past, 1)).json()["reason"], "past")
         self.assertEqual(Client().get(f"/cars/{self.car.pk}/availability/").status_code, 400)
 
-    def test_next_available_start_skips_back_to_back_bookings(self):
+    def test_suggested_start_skips_back_to_back_bookings(self):
         first = self.make("DG-FLOW-0004", days_from_now=2, length=2)
         second = Booking.objects.create(
             booking_id="DG-FLOW-0005", user=self.other, car=self.car, pickup_location=self.loc,
@@ -1094,7 +1109,7 @@ class BookedCarOtherDatesTests(FlowFixtureMixin, TestCase):
             status=Booking.Status.CONFIRMED, payment_status=Booking.PaymentStatus.PAID,
         )
         pickup = first.pickup_datetime + timedelta(hours=2)
-        nxt = self.car.next_available_start(pickup, pickup + timedelta(days=1))
+        nxt = availability_for(self.car, pickup, pickup + timedelta(days=1))["suggestion"]["pickup"]
         self.assertGreaterEqual(nxt, second.dropoff_datetime)
 
     def test_booking_dates_post_for_free_window_creates_hold(self):
@@ -1465,7 +1480,9 @@ class PublicPagesTests(TestCase):
 class AuthPageTests(TestCase):
     def test_login_loads_clerk_once_and_points_clerk_at_our_pages(self):
         body = Client().get("/login/", {"next": "/booking/3/"}).content.decode()
-        self.assertEqual(body.count("clerk.browser.js"), 1)
+        # auth.js adds the Clerk script itself, only on pages that need it.
+        self.assertEqual(body.count('data-publishable-key="pk_test_example"'), 1)
+        self.assertNotIn("clerk.browser.js", body)
         self.assertIn('data-login-url="/login/"', body)
         self.assertIn('data-signup-url="/signup/"', body)
         self.assertIn('data-next="/booking/3/"', body)
@@ -1485,7 +1502,9 @@ class AuthPageTests(TestCase):
     def test_logged_out_page_does_not_auto_sync(self):
         body = Client().get("/logout/").content.decode()
         self.assertIn("data-auth-page", body)
-        self.assertEqual(body.count("clerk.browser.js"), 1)
+        # auth.js adds the Clerk script itself, only on pages that need it.
+        self.assertEqual(body.count('data-publishable-key="pk_test_example"'), 1)
+        self.assertNotIn("clerk.browser.js", body)
 
 
 class SeedFleetCommandTests(TestCase):
@@ -1626,3 +1645,45 @@ class ClerkTokenVerificationTests(TestCase):
 
         self.assertIsNone(self.utils.verify_clerk_session_token(self.token(exp=int(time.time()) - 600), "drivego.vercel.app"))
         self.assertIsNone(self.utils.verify_clerk_session_token(self.token(), "evil.example.com"))
+
+
+class PageQueryCountTests(TestCase):
+    """List pages must not run database queries per car (each query is a network round trip in production)."""
+
+    def setUp(self):
+        locs = [Location.objects.create(name=f"Q{i}", address="A", city="Kolkata") for i in range(3)]
+        user = Customer.objects.create(clerk_user_id="user_q", email="q@example.com")
+        now = timezone.now()
+        for i in range(12):
+            car = Car.objects.create(location=locs[i % 3], brand="Brand", model=f"M{i}", registration_number=f"WBQ{i:04d}",
+                                     category=["Hatchback", "Sedan", "SUV"][i % 3], price_per_day=1000 + i * 100)
+            Booking.objects.create(booking_id=f"DG-Q-{i:04d}", user=user, car=car, pickup_location=car.location,
+                                   pickup_datetime=now + timedelta(days=1), dropoff_datetime=now + timedelta(days=3),
+                                   status=Booking.Status.CONFIRMED, payment_status=Booking.PaymentStatus.PAID)
+        CarBlock.objects.create(car=Car.objects.first(), start_datetime=now + timedelta(days=5), end_datetime=now + timedelta(days=6))
+
+    def test_list_pages_use_a_fixed_number_of_queries(self):
+        for url, limit in (("/", 8), ("/cars/", 8)):
+            with self.subTest(url=url), self.assertNumQueriesLessThan(limit):
+                self.assertEqual(Client().get(url).status_code, 200)
+        client = _login("user_q")
+        with self.assertNumQueriesLessThan(10):
+            client.get("/cars/")
+        Customer.objects.filter(clerk_user_id="user_q").update(role="ADMIN")
+        for url in ("/dashboard/", "/dashboard/cars/"):
+            with self.subTest(url=url), self.assertNumQueriesLessThan(20):
+                self.assertEqual(client.get(url).status_code, 200)
+
+    def assertNumQueriesLessThan(self, limit):
+        from contextlib import contextmanager
+
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        @contextmanager
+        def check():
+            with CaptureQueriesContext(connection) as ctx:
+                yield
+            self.assertLess(len(ctx.captured_queries), limit, f"{len(ctx.captured_queries)} queries")
+
+        return check()

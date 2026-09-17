@@ -2,7 +2,7 @@
 {# Expects car, info (availability_for), qs (date query string); optional estimate. #}
 <article class="vc{% if not info.available %} is-busy{% endif %}">
   <a class="vc-photo" href="{% url 'car_detail' car.id %}?{{ qs }}" tabindex="-1" aria-hidden="true">
-    <img src="{{ car.display_image }}" alt="" loading="lazy" />
+    <img src="{{ car.display_image|thumb:500 }}" alt="" loading="lazy" />
     {% if info.available %}<span class="vc-badge is-ok">Available</span>
     {% elif info.reason == 'out_of_service' %}<span class="vc-badge is-no">{{ car.get_status_display }}</span>
     {% else %}<span class="vc-badge is-no">Booked</span>{% endif %}

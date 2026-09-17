@@ -32,7 +32,7 @@
   <div class="mb-list">
     {% for b in bookings %}
     <article class="mb-card">
-      <img class="mb-photo" src="{{ b.car.display_image }}" alt="{{ b.car }}" loading="lazy" />
+      <img class="mb-photo" src="{{ b.car.display_image|thumb:330 }}" alt="{{ b.car }}" loading="lazy" />
       <div class="mb-info">
         <div class="mb-title">
           <h2>{{ b.car.brand }} {{ b.car.model }}</h2>

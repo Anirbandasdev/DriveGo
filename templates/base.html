@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>{% block title %}DriveGo - Rent. Drive. Repeat.{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{% static 'css/styles.css' %}" />
 <link rel="stylesheet" href="{% static 'css/public.css' %}" />
@@ -18,8 +18,7 @@
 {% block footer %}{% include "partials/footer.html" %}{% endblock %}
 <script src="{% static 'js/site.js' %}"></script>
 {% if clerk_key %}
-<div id="clerkConfig" hidden data-login-url="{% url 'login' %}" data-signup-url="{% url 'signup' %}" data-callback-url="{% url 'clerk_callback' %}" data-logout-url="{% url 'logout' %}" data-home-url="{% url 'home' %}"></div>
-<script async crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_key }}" src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js"></script>
+<div id="clerkConfig" hidden data-publishable-key="{{ clerk_key }}" data-login-url="{% url 'login' %}" data-signup-url="{% url 'signup' %}" data-callback-url="{% url 'clerk_callback' %}" data-logout-url="{% url 'logout' %}" data-home-url="{% url 'home' %}"></div>
 <script src="{% static 'js/auth.js' %}"></script>
 <div id="authLoader" class="auth-loader" hidden><span class="spinner"></span>Signing you in…</div>
 {% endif %}

@@ -19,7 +19,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from .forms import MAX_RENTAL_DAYS, BookingDatesForm, DeliveryForm, DocumentUploadForm
-from .models import Booking, Car, CarBlock, Customer, Document, Location, SiteSetting
+from .models import Booking, Car, CarBlock, Customer, Document, Location, SiteSetting, overlapping
 from .utils import (
     create_razorpay_order,
     fetch_document_bytes,
@@ -43,10 +43,11 @@ DEFAULT_DROP_TIME = "18:00"
 # ---------------------------------------------------------------------------
 
 def get_customer(request):
-    clerk_user_id = request.session.get("clerk_user_id")
-    if not clerk_user_id:
-        return None
-    return Customer.objects.filter(clerk_user_id=clerk_user_id).first()
+    """The signed-in customer, looked up once per request."""
+    if not hasattr(request, "_customer"):
+        clerk_user_id = request.session.get("clerk_user_id")
+        request._customer = Customer.objects.filter(clerk_user_id=clerk_user_id).first() if clerk_user_id else None
+    return request._customer
 
 
 def _login_redirect(request):
@@ -171,19 +172,23 @@ def _fmt(dt):
     return timezone.localtime(dt).strftime("%d %b, %I:%M %p").lstrip("0")
 
 
-def own_hold_ids(request, car):
-    """The visitor's own unpaid holds on ``car``; they must never block the visitor."""
+def own_hold_ids(request, car=None):
+    """The visitor's own unpaid holds (on ``car``, or on any car); they must never block the visitor."""
     customer = get_customer(request)
     if customer is None:
         return []
-    return list(
-        Booking.objects.filter(user=customer, car=car, status=Booking.Status.PENDING)
-        .exclude(payment_status=Booking.PaymentStatus.PAID).values_list("pk", flat=True)
-    )
+    holds = Booking.objects.filter(user=customer, status=Booking.Status.PENDING).exclude(payment_status=Booking.PaymentStatus.PAID)
+    if car is not None:
+        holds = holds.filter(car=car)
+    return list(holds.values_list("pk", flat=True))
 
 
-def availability_for(car, pickup, drop, exclude_ids=None):
-    """Everything the UI needs to explain whether ``car`` can be booked for a window."""
+def availability_for(car, pickup, drop, exclude_ids=None, periods=None):
+    """Everything the UI needs to explain whether ``car`` can be booked for a window.
+
+    ``periods`` are the car's merged busy periods over ``Car.search_window``; list pages
+    load them for all cars at once with ``Car.busy_periods_for`` to avoid per-car queries.
+    """
     info = {"available": False, "reason": "", "message": "", "clash": None, "suggestion": None}
     if car.status != "AVAILABLE":
         info.update(reason="out_of_service", message="This car is temporarily out of service.")
@@ -197,17 +202,28 @@ def availability_for(car, pickup, drop, exclude_ids=None):
     if drop - pickup > timedelta(days=MAX_RENTAL_DAYS):
         info.update(reason="too_long", message=f"Trips can be at most {MAX_RENTAL_DAYS} days long.")
         return info
-    if car.is_available_for(pickup, drop, exclude_ids):
+    if periods is None:
+        start, end = Car.search_window(pickup, drop)
+        periods = car.busy_periods(start, end, exclude_ids)
+    clashes = overlapping(periods, pickup, drop)
+    if not clashes:
         info.update(available=True, reason="available", message="Available for your dates")
         return info
-    periods = car.busy_periods(pickup, drop, exclude_ids)
-    if periods:
-        info["clash"] = {"from": periods[0][0], "to": periods[-1][1]}
+    info["clash"] = {"from": clashes[0][0], "to": clashes[-1][1]}
     info.update(reason="booked", message="Already booked for part of these dates.")
-    nxt = car.next_available_start(pickup, drop, exclude_ids)
+    nxt = Car.next_start_in(periods, pickup, drop)
     if nxt:
         info["suggestion"] = {"pickup": nxt, "drop": nxt + (drop - pickup), "params": window_params(nxt, nxt + (drop - pickup))}
     return info
+
+
+def availability_for_cars(request, cars, pickup, drop):
+    """``{car_id: availability info}`` for a list of cars with a fixed number of queries."""
+    periods = {}
+    if drop > pickup:
+        start, end = Car.search_window(pickup, drop)
+        periods = Car.busy_periods_for(cars, start, end, own_hold_ids(request))
+    return {car.pk: availability_for(car, pickup, drop, periods=periods.get(car.pk, [])) for car in cars}
 
 
 def price_estimate(car, pickup, drop, delivery_method="STORE_PICKUP"):
@@ -285,31 +301,33 @@ def car_availability(request, car_id):
 
 def home(request):
     in_service = Q(cars__status="AVAILABLE")
-    locations = Location.objects.filter(is_active=True).annotate(car_count=Count("cars", filter=in_service)).order_by("name")
+    locations = list(Location.objects.filter(is_active=True).annotate(car_count=Count("cars", filter=in_service)).order_by("name"))
     pickup, drop = default_window()
     qs = urlencode(window_params(pickup, drop))
-    fleet = Car.objects.filter(status="AVAILABLE", location__is_active=True).select_related("location")
-    popular_cars = []
-    for car in fleet.annotate(trips=Count("bookings")).order_by("-trips", "price_per_day")[:8]:
-        popular_cars.append({"car": car, "info": availability_for(car, pickup, drop), "qs": qs,
-                             "estimate": price_estimate(car, pickup, drop)})
+    fleet = list(
+        Car.objects.filter(status="AVAILABLE", location__is_active=True).select_related("location")
+        .annotate(trips=Count("bookings")).order_by("-trips", "price_per_day")
+    )
+    popular = fleet[:8]
+    availability = availability_for_cars(request, popular, pickup, drop)
+    popular_cars = [{"car": car, "info": availability[car.pk], "qs": qs, "estimate": price_estimate(car, pickup, drop)}
+                    for car in popular]
     car_types = []
     for name, _ in Car.CATEGORY_CHOICES:
-        cars = fleet.filter(category=name)
-        cheapest = cars.order_by("price_per_day").first()
-        if cheapest:
-            car_types.append({"name": name, "count": cars.count(), "from_price": cheapest.price_per_day,
-                              "image": cheapest.display_image})
+        cars = sorted((car for car in fleet if car.category == name), key=lambda car: car.price_per_day)
+        if cars:
+            car_types.append({"name": name, "count": len(cars), "from_price": cars[0].price_per_day, "image": cars[0].display_image})
+    with_photo = [car for car in fleet if car.image_url]
     return render(request, "index.html", {
         "locations": locations,
         "popular_cars": popular_cars,
         "car_types": car_types,
-        "featured_car": fleet.exclude(image_url="").order_by("-price_per_day").first(),
+        "featured_car": max(with_photo, key=lambda car: car.price_per_day) if with_photo else None,
         "window": window_params(pickup, drop),
         "popular_qs": qs,
         "pickup": pickup, "drop": drop,
-        "fleet_count": fleet.count(),
-        "location_count": locations.count(),
+        "fleet_count": len(fleet),
+        "location_count": len(locations),
         "trips_count": Booking.objects.filter(status=Booking.Status.COMPLETED).count(),
     })
 
@@ -345,10 +363,10 @@ def car_list(request):
 
     pickup, drop, dated = resolve_window(params)
     qs = urlencode(window_params(pickup, drop))
-    results = []
-    for car in cars:
-        info = availability_for(car, pickup, drop, own_hold_ids(request, car))
-        results.append({"car": car, "info": info, "qs": qs, "estimate": price_estimate(car, pickup, drop) if drop > pickup else None})
+    cars = list(cars)
+    availability = availability_for_cars(request, cars, pickup, drop)
+    results = [{"car": car, "info": availability[car.pk], "qs": qs, "estimate": price_estimate(car, pickup, drop) if drop > pickup else None}
+               for car in cars]
     if params.get("available_only") == "1":
         results = [r for r in results if r["info"]["available"]]
     if sort not in ("Low", "High"):
@@ -872,6 +890,7 @@ def clerk_callback(request):
 
 def logout_view(request):
     request.session.flush()
+    request._customer = None
     return render(request, "logged_out.html")
 
 
@@ -919,12 +938,16 @@ def admin_dashboard(request):
     paid = Booking.objects.filter(payment_status=Booking.PaymentStatus.PAID)
     related = ("user", "car", "pickup_location")
 
+    first_day = today - timedelta(days=6)
+    totals = {}
+    recent_paid = paid.filter(created_at__gte=timezone.make_aware(datetime.combine(first_day, time.min)))
+    for created_at, amount in recent_paid.values_list("created_at", "total_amount"):
+        day = timezone.localtime(created_at).date()
+        totals[day] = totals.get(day, 0) + amount
     week = []
-    for offset in range(6, -1, -1):
-        day = today - timedelta(days=offset)
-        start = timezone.make_aware(datetime.combine(day, time.min))
-        total = paid.filter(created_at__gte=start, created_at__lt=start + timedelta(days=1)).aggregate(t=Sum("total_amount"))["t"] or 0
-        week.append({"label": day.strftime("%a"), "date": day, "total": int(total)})
+    for offset in range(7):
+        day = first_day + timedelta(days=offset)
+        week.append({"label": day.strftime("%a"), "date": day, "total": int(totals.get(day, 0))})
     week_max = max([d["total"] for d in week] + [1])
     for d in week:
         d["pct"] = round(d["total"] * 100 / week_max)
@@ -1110,20 +1133,21 @@ def admin_set_role(request, customer_id):
 @clerk_admin_required
 def admin_cars(request):
     now = timezone.now()
-    availability = {
-        "Available": Car.objects.filter(status="AVAILABLE").count(),
-        "Maintenance": Car.objects.filter(status="MAINTENANCE").count(),
-        "Inactive": Car.objects.filter(status="INACTIVE").count(),
-    }
+    counts = dict(Car.objects.values_list("status").annotate(n=Count("id")))
+    availability = {label: counts.get(value, 0) for value, label in Car.STATUS_CHOICES}
+    upcoming_by_car = {}
+    upcoming = Booking.objects.filter(
+        status__in=[Booking.Status.PENDING_VERIFICATION, Booking.Status.CONFIRMED, Booking.Status.ACTIVE],
+        dropoff_datetime__gt=now,
+    ).order_by("pickup_datetime")
+    for booking in upcoming:
+        upcoming_by_car.setdefault(booking.car_id, []).append(booking)
     rows = []
     for car in Car.objects.select_related("location").order_by("brand", "model"):
-        upcoming = Booking.objects.filter(
-            car=car, status__in=[Booking.Status.PENDING_VERIFICATION, Booking.Status.CONFIRMED, Booking.Status.ACTIVE],
-            dropoff_datetime__gt=now,
-        ).order_by("pickup_datetime")
-        current = upcoming.filter(pickup_datetime__lte=now).first()
-        rows.append({"car": car, "current": current, "next": upcoming.exclude(pk=getattr(current, "pk", None)).first(),
-                     "upcoming_count": upcoming.count()})
+        bookings = upcoming_by_car.get(car.pk, [])
+        current = next((b for b in bookings if b.pickup_datetime <= now), None)
+        later = [b for b in bookings if b is not current]
+        rows.append({"car": car, "current": current, "next": later[0] if later else None, "upcoming_count": len(bookings)})
     return render(request, "admin_cars.html", _admin_ctx(
         "cars", availability=availability, rows=rows, all_cars=[r["car"] for r in rows],
         all_locations=Location.objects.all().order_by("name"),

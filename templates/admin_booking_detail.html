@@ -36,7 +36,7 @@
     <section class="adm-card">
       <div class="adm-card-head"><h2>Trip</h2></div>
       <div class="detail-car">
-        <img src="{{ booking.car.display_image }}" alt="" />
+        <img src="{{ booking.car.display_image|thumb:330 }}" alt="" />
         <div>
           <b>{{ booking.car }}</b>
           <span>{{ booking.car.registration_number }} · {{ booking.car.category }} · {{ booking.car.transmission }}</span>

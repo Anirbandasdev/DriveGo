@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {# Shared layout for /login/ and /signup/. Child templates set auth_mode, heading and copy blocks. #}
 {% block body_attrs %} data-auth-page{% endblock %}
+{% block extra_css %}<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>{% endblock %}
 {% block messages %}{% endblock %}
 {% block footer %}{% endblock %}
 {% block content %}

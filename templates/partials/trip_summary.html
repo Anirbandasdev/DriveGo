@@ -1,7 +1,7 @@
 {% load rental_tags %}
 <div class="trip">
   <div class="trip-photo">
-    <img src="{{ car.display_image }}" alt="{{ car.brand }} {{ car.model }}" />
+    <img src="{{ car.display_image|thumb:500 }}" alt="{{ car.brand }} {{ car.model }}" />
     <span class="trip-tag">{{ car.category }}</span>
   </div>
   <div class="trip-body">

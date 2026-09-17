@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal, InvalidOperation
 
 from django import template
@@ -66,3 +67,16 @@ def inr(value):
 @register.filter
 def split_csv(value):
     return [part.strip() for part in str(value).split(",") if part.strip()]
+
+
+@register.filter
+def thumb(url, width=500):
+    """Smaller Wikimedia thumbnail for small image slots (cards, lists).
+
+    Other image hosts are returned unchanged. Wikimedia only serves standard
+    widths, so use one of 120, 250, 330, 500 or 960.
+    """
+    url = str(url or "")
+    if "upload.wikimedia.org" in url and "/thumb/" in url:
+        return re.sub(r"/\d+px-([^/]+)$", rf"/{width}px-\1", url)
+    return url
