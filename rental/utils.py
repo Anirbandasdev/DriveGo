@@ -161,16 +161,17 @@ def verify_razorpay_signature(order_id, payment_id, signature):
     return hmac.compare_digest(expected, signature)
 
 
-def fetch_razorpay_order(order_id):
-    if settings.RAZORPAY_MOCK or (order_id or "").startswith("order_mock_"):
+def fetch_razorpay_payment(payment_id):
+    """The payment as Razorpay knows it: amount, order and the method the customer picked."""
+    if settings.RAZORPAY_MOCK or (payment_id or "").startswith("pay_mock_"):
         return {}
     client = razorpay_client()
     if client is None:
         return {}
     try:
-        return client.order.fetch(order_id)
+        return client.payment.fetch(payment_id)
     except Exception:
-        logger.exception("Razorpay order fetch failed for %s", order_id)
+        logger.exception("Razorpay payment fetch failed for %s", payment_id)
         return {}
 
 

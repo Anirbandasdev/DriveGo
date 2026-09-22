@@ -1237,6 +1237,44 @@ class CheckoutGuardTests(FlowFixtureMixin, TestCase):
         self.assertEqual(hold.status, Booking.Status.CONFIRMED)
 
     @override_settings(RAZORPAY_KEY_ID="rzp_live", RAZORPAY_KEY_SECRET="secret", RAZORPAY_MOCK=False)
+    def test_live_payment_page_leaves_method_choice_to_razorpay(self):
+        hold = self.make("DG-GRD-0011", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        with patch("rental.views.create_razorpay_order", return_value={"id": "order_live_1"}):
+            body = _login("user_flow").get(f"/payment/{hold.booking_id}/").content.decode()
+        self.assertIn("checkout.razorpay.com", body)
+        self.assertNotIn('name="pay_method"', body)
+
+    @override_settings(RAZORPAY_KEY_ID="rzp_live", RAZORPAY_KEY_SECRET="secret", RAZORPAY_MOCK=False)
+    def test_payment_method_comes_from_razorpay(self):
+        hold = self.make("DG-GRD-0012", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold.razorpay_order_id = "order_live_2"
+        hold.save(update_fields=["razorpay_order_id"])
+        remote = {"amount": int(hold.total_amount * 100), "order_id": "order_live_2", "method": "upi"}
+        with patch("rental.views.verify_razorpay_signature", return_value=True),                 patch("rental.views.fetch_razorpay_payment", return_value=remote):
+            response = _login("user_flow").post("/payment/verify/", data=json.dumps({
+                "booking_id": hold.booking_id, "razorpay_order_id": "order_live_2",
+                "razorpay_payment_id": "pay_live_2", "razorpay_signature": "sig", "method": "card",
+            }), content_type="application/json")
+        self.assertTrue(response.json()["ok"])
+        hold.refresh_from_db()
+        self.assertEqual(hold.payment_method, "upi")
+
+    @override_settings(RAZORPAY_KEY_ID="rzp_live", RAZORPAY_KEY_SECRET="secret", RAZORPAY_MOCK=False)
+    def test_payment_for_another_order_is_rejected(self):
+        hold = self.make("DG-GRD-0013", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold.razorpay_order_id = "order_live_3"
+        hold.save(update_fields=["razorpay_order_id"])
+        remote = {"amount": int(hold.total_amount * 100), "order_id": "order_someone_else", "method": "upi"}
+        with patch("rental.views.verify_razorpay_signature", return_value=True),                 patch("rental.views.fetch_razorpay_payment", return_value=remote):
+            response = _login("user_flow").post("/payment/verify/", data=json.dumps({
+                "booking_id": hold.booking_id, "razorpay_order_id": "order_live_3",
+                "razorpay_payment_id": "pay_live_3", "razorpay_signature": "sig",
+            }), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        hold.refresh_from_db()
+        self.assertNotEqual(hold.payment_status, Booking.PaymentStatus.PAID)
+
+    @override_settings(RAZORPAY_KEY_ID="rzp_live", RAZORPAY_KEY_SECRET="secret", RAZORPAY_MOCK=False)
     def test_mock_order_rejected_once_demo_mode_is_off(self):
         hold = self.make("DG-GRD-0009", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
         hold.razorpay_order_id = "order_mock_DG-GRD-0009"

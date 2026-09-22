@@ -18,11 +18,16 @@
     <span>Booking {{ booking.booking_id }} · {{ car.brand }} {{ car.model }}</span>
   </div>
 
+  {% if is_mock %}
+  {# Only demo mode needs its own picker; the real Razorpay window has one. #}
   <div class="pay-methods" role="radiogroup" aria-label="Payment method">
     <label class="pay-method"><input type="radio" name="pay_method" value="upi" checked /><span><b>UPI</b><small>GPay, PhonePe, Paytm</small></span></label>
     <label class="pay-method"><input type="radio" name="pay_method" value="card" /><span><b>Card</b><small>Visa, Mastercard, RuPay</small></span></label>
     <label class="pay-method"><input type="radio" name="pay_method" value="netbanking" /><span><b>Net banking</b><small>All major banks</small></span></label>
   </div>
+  {% else %}
+  <ul class="pay-accepted"><li>UPI</li><li>Cards</li><li>Net banking</li><li>Wallets</li></ul>
+  {% endif %}
 
   <div class="co-alert is-error" id="payMsg" role="alert" hidden></div>
 
@@ -45,8 +50,8 @@
   var spinner = btn.querySelector('.spinner');
   var label = btn.querySelector('[data-label]');
   var idleLabel = label.textContent;
-  function method() { var el = document.querySelector('input[name="pay_method"]:checked'); return el ? el.value : ''; }
-  function busy(on, text) {
+{% if is_mock %}  function method() { var el = document.querySelector('input[name="pay_method"]:checked'); return el ? el.value : ''; }
+{% endif %}  function busy(on, text) {
     btn.disabled = on; spinner.hidden = !on; label.textContent = on ? (text || 'Processing…') : idleLabel;
   }
   function fail(text) { busy(false); msg.textContent = text; msg.hidden = false; }
@@ -87,8 +92,7 @@
           booking_id: "{{ booking.booking_id|escapejs }}",
           razorpay_order_id: resp.razorpay_order_id,
           razorpay_payment_id: resp.razorpay_payment_id,
-          razorpay_signature: resp.razorpay_signature,
-          method: method()
+          razorpay_signature: resp.razorpay_signature
         });
       },
       modal: { ondismiss: function () { busy(false); } }

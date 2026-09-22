@@ -23,7 +23,7 @@ from .models import Booking, Car, CarBlock, Customer, Document, Location, SiteSe
 from .utils import (
     create_razorpay_order,
     fetch_document_bytes,
-    fetch_razorpay_order,
+    fetch_razorpay_payment,
     get_user_role,
     process_refund,
     send_booking_confirmation_email,
@@ -724,8 +724,10 @@ def payment_verify(request):
         booking.razorpay_payment_id = payment_id
         booking.save(update_fields=["payment_status", "razorpay_payment_id"])
         return JsonResponse({"ok": False, "error": "Payment verification failed."}, status=400)
-    remote = fetch_razorpay_order(order_id)
-    if remote and int(remote.get("amount", 0)) != int(booking.total_amount * 100):
+    remote = fetch_razorpay_payment(payment_id)
+    # Razorpay is the source of truth for what was actually paid, and how.
+    paid_method = remote.get("method") or payload.get("method") or ""
+    if remote and (int(remote.get("amount", 0)) != int(booking.total_amount * 100) or remote.get("order_id") != order_id):
         booking.payment_status = Booking.PaymentStatus.FAILED
         booking.razorpay_payment_id = payment_id
         booking.save(update_fields=["payment_status", "razorpay_payment_id"])
@@ -749,7 +751,7 @@ def payment_verify(request):
             return JsonResponse({"ok": False, "error": error}, status=409)
         booking.payment_status = Booking.PaymentStatus.PAID
         booking.razorpay_payment_id = payment_id
-        booking.payment_method = (payload.get("method") or "")[:30]
+        booking.payment_method = paid_method[:30]
         booking.status = Booking.Status.CONFIRMED if booking.documents_verified() else Booking.Status.PENDING_VERIFICATION
         booking.save(update_fields=["payment_status", "razorpay_payment_id", "payment_method", "status"])
     send_booking_confirmation_email(booking)
