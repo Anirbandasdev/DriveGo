@@ -141,6 +141,7 @@ class AdminAccessTests(TestCase):
         self.assertIn('href="/login/" class="btn btn-ghost">Login', body)
 
 
+@override_settings(RAZORPAY_MOCK=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
 class BookingGuardTests(TestCase):
     def setUp(self):
         loc = Location.objects.create(name="Salt Lake", address="Sector V", city="Kolkata")
@@ -198,6 +199,7 @@ class BookingGuardTests(TestCase):
         self.assertEqual(self.booking.payment_status, Booking.PaymentStatus.PAID)
 
 
+@override_settings(RAZORPAY_MOCK=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
 class DemoModeTests(TestCase):
     def setUp(self):
         self.customer = Customer.objects.create(clerk_user_id="user_cust", email="c@example.com")
@@ -899,6 +901,7 @@ class AdminBookingsFilterTests(TestCase):
         self.assertNotContains(response, "DG-ACTIVE")
 
 
+@override_settings(RAZORPAY_MOCK=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
 class RegressionFixTests(TestCase):
     def setUp(self):
         self.loc = Location.objects.create(name="Regression", address="Addr", city="Kolkata")
@@ -1171,6 +1174,7 @@ class BookingIdTests(FlowFixtureMixin, TestCase):
         self.assertNotEqual(generate_booking_id(), second)
 
 
+@override_settings(RAZORPAY_MOCK=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
 class CheckoutGuardTests(FlowFixtureMixin, TestCase):
     def test_payment_requires_documents(self):
         hold = self.make("DG-GRD-0001", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
