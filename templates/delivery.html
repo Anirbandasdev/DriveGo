@@ -2,8 +2,8 @@
 {% load rental_tags %}
 {% block page %}delivery{% endblock %}
 {% block title %}DriveGo - Pickup or Delivery{% endblock %}
-{% block back_url %}{% url 'verification' booking.booking_id %}{% endblock %}
-{% block back_label %}Back to documents{% endblock %}
+{% block back_url %}{% url 'driver' booking.booking_id %}{% endblock %}
+{% block back_label %}Back to driver{% endblock %}
 {% block heading %}How do you want to get the car?{% endblock %}
 {% block subheading %}Collect it yourself for free, or we'll bring it to your door.{% endblock %}
 {% block step %}
@@ -45,7 +45,7 @@
   </fieldset>
 
   <div class="co-actions">
-    <a class="btn btn-ghost" href="{% url 'verification' booking.booking_id %}">Back</a>
+    <a class="btn btn-ghost" href="{% url 'driver' booking.booking_id %}">Back</a>
     <button class="btn btn-primary" type="submit">Review booking</button>
   </div>
 </form>

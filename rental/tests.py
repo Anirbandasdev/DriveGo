@@ -7,7 +7,7 @@ from django.conf import settings
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
-from .models import Booking, Car, CarBlock, Customer, Document, Location, SiteSetting
+from .models import Booking, Car, CarBlock, Customer, Location, SiteSetting
 from .views import availability_for
 
 
@@ -368,8 +368,7 @@ class PaymentGuardTests(TestCase):
     def test_demo_mode_completes_booking_when_keys_configured(self):
         SiteSetting.set("demo_mode", "on")
         booking = self.make("DG-PAY-DEMO", Booking.Status.PENDING, Booking.PaymentStatus.PENDING)
-        for doc_type in Document.DocType.values:
-            Document.objects.create(booking=booking, document_type=doc_type, file="")
+        _add_driver(booking)
         client = self.login()
         client.get(f"/payment/{booking.booking_id}/")
         booking.refresh_from_db()
@@ -380,7 +379,8 @@ class PaymentGuardTests(TestCase):
         self.assertTrue(response.json()["ok"])
         booking.refresh_from_db()
         self.assertEqual(booking.payment_status, Booking.PaymentStatus.PAID)
-        self.assertEqual(booking.status, Booking.Status.PENDING_VERIFICATION)
+        # The licence was checked before payment, so nothing waits on a human now.
+        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
 
 
 class CancelBookingTests(TestCase):
@@ -550,38 +550,6 @@ class AdminControlsTests(TestCase):
         b.save()
         return b
 
-    def add_doc(self, b, verified=False, doc_type=Document.DocType.DRIVING_LICENSE):
-        return Document.objects.create(
-            booking=b, document_type=doc_type, file="",
-            verification_status=Document.VerificationStatus.VERIFIED if verified else Document.VerificationStatus.PENDING,
-        )
-
-    def test_admin_approve_docs_confirms_paid_booking(self):
-        b = self.make("DG-ADM-0001")
-        doc = self.add_doc(b)
-        self.add_doc(b, doc_type=Document.DocType.GOVT_ID)
-        self.login().post(f"/dashboard/bookings/{b.booking_id}/docs/approve/")
-        doc.refresh_from_db()
-        b.refresh_from_db()
-        self.assertEqual(doc.verification_status, Document.VerificationStatus.VERIFIED)
-        self.assertEqual(b.status, Booking.Status.CONFIRMED)
-
-    def test_admin_reject_docs_sets_reason(self):
-        b = self.make("DG-ADM-0002")
-        self.add_doc(b)
-        self.login().post(f"/dashboard/bookings/{b.booking_id}/docs/reject/", {"reason": "Blurry scan"})
-        doc = b.documents.get()
-        self.assertEqual(doc.verification_status, Document.VerificationStatus.REJECTED)
-        self.assertEqual(doc.rejection_reason, "Blurry scan")
-        b.refresh_from_db()
-        self.assertEqual(b.status, Booking.Status.PENDING_VERIFICATION)
-
-    def test_admin_reject_requires_reason(self):
-        b = self.make("DG-ADM-0003")
-        self.add_doc(b)
-        self.login().post(f"/dashboard/bookings/{b.booking_id}/docs/reject/", {"reason": ""})
-        self.assertNotEqual(b.documents.get().verification_status, Document.VerificationStatus.REJECTED)
-
     def test_customer_cannot_run_admin_actions(self):
         b = self.make("DG-ADM-0004")
         self.login(admin=False).post(f"/dashboard/bookings/{b.booking_id}/cancel/")
@@ -608,9 +576,9 @@ class AdminControlsTests(TestCase):
 
     def test_admin_note(self):
         b = self.make("DG-ADM-0007")
-        self.login().post(f"/dashboard/bookings/{b.booking_id}/note/", {"note": "Please upload license back"})
+        self.login().post(f"/dashboard/bookings/{b.booking_id}/note/", {"note": "Bring the original licence"})
         b.refresh_from_db()
-        self.assertEqual(b.admin_note, "Please upload license back")
+        self.assertEqual(b.admin_note, "Bring the original licence")
 
     def test_admin_can_add_car(self):
         client = self.login()
@@ -621,17 +589,6 @@ class AdminControlsTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Car.objects.filter(registration_number="WB06T9912").exists())
-
-    def test_verification_queue_lists_paid_bookings_not_abandoned_holds(self):
-        paid = self.make("DG-ADM-0008")
-        self.add_doc(paid)
-        stale = self.make("DG-ADM-0009", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
-        Booking.objects.filter(pk=stale.pk).update(
-            created_at=self.now - timedelta(minutes=settings.BOOKING_HOLD_MINUTES + 30))
-        response = self.login().get("/dashboard/verifications/")
-        self.assertContains(response, "DG-ADM-0008")
-        self.assertNotContains(response, "DG-ADM-0009")
-
 
 class ExpiredPendingTests(TestCase):
     """Test that expired PENDING bookings don't appear as 'upcoming'."""
@@ -958,8 +915,7 @@ class RegressionFixTests(TestCase):
     def test_payment_retry_rotates_razorpay_order(self):
         SiteSetting.set("demo_mode", "on")
         booking = self.make("DG-REG-RTRY")
-        for doc_type in Document.DocType.values:
-            Document.objects.create(booking=booking, document_type=doc_type, file="")
+        _add_driver(booking)
         booking.razorpay_order_id = "order_old_attempt"
         booking.save(update_fields=["razorpay_order_id"])
         client = self.login()
@@ -1001,14 +957,23 @@ class RegressionFixTests(TestCase):
         self.assertIn("DG-REG-REJ", html)
         self.assertNotIn(f'href="/confirmation/{rejected.booking_id}/"', html)
 
-    def test_document_form_allows_submit_with_all_docs_present(self):
-        booking = self.make("DG-REG-DOCS")
-        Document.objects.create(booking=booking, document_type=Document.DocType.DRIVING_LICENSE, file="")
-        Document.objects.create(booking=booking, document_type=Document.DocType.GOVT_ID, file="")
-        client = self.login()
-        response = client.post(f"/verification/{booking.booking_id}/", {})
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], f"/delivery/{booking.booking_id}/")
+LICENCE = "WB01 20150012345"
+
+
+def _add_driver(booking, choice="SELF", name="Flow User", number="WB0120150012345", born=(1995, 4, 12)):
+    """Give a booking the licence details the checkout step would have saved."""
+    from datetime import date
+
+    booking.set_driver(choice, name, number, date(*born), timezone.localdate() + timedelta(days=900))
+    booking.save()
+    return booking
+
+
+def _driver_post(name="Flow User", number=LICENCE, born="1995-04-12", expiry=None, choice="SELF"):
+    return {
+        "driver_choice": choice, "driver_name": name, "licence_number": number, "date_of_birth": born,
+        "expiry_date": expiry or (timezone.localdate() + timedelta(days=900)).isoformat(),
+    }
 
 
 def _login(user_id):
@@ -1034,7 +999,7 @@ class FlowFixtureMixin:
         self.now = timezone.now()
 
     def make(self, bid, days_from_now=3, length=2, user=None, status=Booking.Status.CONFIRMED,
-             pay=Booking.PaymentStatus.PAID, docs=False, verified=False):
+             pay=Booking.PaymentStatus.PAID, driver=False):
         b = Booking.objects.create(
             booking_id=bid, user=user or self.user, car=self.car, pickup_location=self.loc,
             pickup_datetime=self.now + timedelta(days=days_from_now),
@@ -1044,12 +1009,8 @@ class FlowFixtureMixin:
         )
         b.apply_price()
         b.save()
-        if docs:
-            for doc_type in Document.DocType.values:
-                Document.objects.create(
-                    booking=b, document_type=doc_type, file="",
-                    verification_status=Document.VerificationStatus.VERIFIED if verified else Document.VerificationStatus.PENDING,
-                )
+        if driver:
+            _add_driver(b)
         return b
 
     @staticmethod
@@ -1121,7 +1082,7 @@ class BookedCarOtherDatesTests(FlowFixtureMixin, TestCase):
         response = _login("user_flow").post(f"/booking/{self.car.pk}/", self.dates(free, 2))
         self.assertEqual(response.status_code, 302)
         hold = Booking.objects.filter(user=self.user, status=Booking.Status.PENDING).get()
-        self.assertIn(f"/verification/{hold.booking_id}/", response["Location"])
+        self.assertIn(f"/driver/{hold.booking_id}/", response["Location"])
 
     def test_booking_dates_post_for_taken_window_shows_suggestion(self):
         booked = self.make("DG-FLOW-0007", days_from_now=2, length=3, user=self.other)
@@ -1139,14 +1100,15 @@ class BookedCarOtherDatesTests(FlowFixtureMixin, TestCase):
         client = _login("user_flow")
         client.post(f"/booking/{self.car.pk}/", self.dates(free, 3))
         first = Booking.objects.get(user=self.user)
-        Document.objects.create(booking=first, document_type=Document.DocType.DRIVING_LICENSE, file="")
+        _add_driver(first)
         response = client.post(f"/booking/{self.car.pk}/", self.dates(free + timedelta(days=1), 3))
         self.assertEqual(response.status_code, 302)
         first.refresh_from_db()
         self.assertEqual(first.status, Booking.Status.CANCELLED)
         second = Booking.objects.exclude(pk=first.pk).get(user=self.user)
         self.assertEqual(second.status, Booking.Status.PENDING)
-        self.assertEqual(second.documents.count(), 1)
+        self.assertTrue(second.driver_checked)
+        self.assertEqual(second.driver_licence_number, first.driver_licence_number)
 
     def test_resubmitting_same_dates_reuses_hold(self):
         free = timezone.localdate() + timedelta(days=12)
@@ -1176,13 +1138,13 @@ class BookingIdTests(FlowFixtureMixin, TestCase):
 
 @override_settings(RAZORPAY_MOCK=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
 class CheckoutGuardTests(FlowFixtureMixin, TestCase):
-    def test_payment_requires_documents(self):
+    def test_payment_requires_driver_details(self):
         hold = self.make("DG-GRD-0001", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
         response = _login("user_flow").get(f"/payment/{hold.booking_id}/")
-        self.assertRedirects(response, f"/verification/{hold.booking_id}/", fetch_redirect_response=False)
+        self.assertRedirects(response, f"/driver/{hold.booking_id}/", fetch_redirect_response=False)
 
     def test_delivery_is_locked_after_payment(self):
-        paid = self.make("DG-GRD-0002", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        paid = self.make("DG-GRD-0002", status=Booking.Status.PENDING_VERIFICATION, driver=True)
         client = _login("user_flow")
         response = client.post(f"/delivery/{paid.booking_id}/", {
             "delivery_method": "HOME_DELIVERY", "delivery_address": "1 Road", "delivery_city": "Kolkata", "delivery_pincode": "700001",
@@ -1192,7 +1154,7 @@ class CheckoutGuardTests(FlowFixtureMixin, TestCase):
         self.assertEqual(paid.delivery_method, "STORE_PICKUP")
 
     def test_delivery_pincode_validated(self):
-        hold = self.make("DG-GRD-0003", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold = self.make("DG-GRD-0003", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, driver=True)
         response = _login("user_flow").post(f"/delivery/{hold.booking_id}/", {
             "delivery_method": "HOME_DELIVERY", "delivery_address": "1 Road", "delivery_city": "Kolkata", "delivery_pincode": "12ab",
         })
@@ -1200,7 +1162,7 @@ class CheckoutGuardTests(FlowFixtureMixin, TestCase):
         self.assertContains(response, "valid 6-digit PIN")
 
     def test_expired_hold_is_refreshed_when_car_still_free(self):
-        hold = self.make("DG-GRD-0004", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold = self.make("DG-GRD-0004", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, driver=True)
         Booking.objects.filter(pk=hold.pk).update(created_at=self.now - timedelta(minutes=settings.BOOKING_HOLD_MINUTES + 5))
         response = _login("user_flow").get(f"/summary/{hold.booking_id}/")
         self.assertEqual(response.status_code, 200)
@@ -1208,7 +1170,7 @@ class CheckoutGuardTests(FlowFixtureMixin, TestCase):
         self.assertFalse(hold.hold_expired)
 
     def test_expired_hold_is_released_when_someone_else_booked(self):
-        hold = self.make("DG-GRD-0005", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold = self.make("DG-GRD-0005", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, driver=True)
         Booking.objects.filter(pk=hold.pk).update(created_at=self.now - timedelta(minutes=settings.BOOKING_HOLD_MINUTES + 5))
         self.make("DG-GRD-0006", user=self.other)
         response = _login("user_flow").get(f"/summary/{hold.booking_id}/")
@@ -1225,7 +1187,7 @@ class CheckoutGuardTests(FlowFixtureMixin, TestCase):
         self.assertEqual(trip.payment_status, Booking.PaymentStatus.PAID)
 
     def test_payment_with_verified_documents_confirms_immediately(self):
-        hold = self.make("DG-GRD-0008", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True, verified=True)
+        hold = self.make("DG-GRD-0008", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, driver=True)
         hold.razorpay_order_id = "order_mock_DG-GRD-0008"
         hold.save(update_fields=["razorpay_order_id"])
         response = _login("user_flow").post("/payment/verify/", data=json.dumps({
@@ -1238,7 +1200,7 @@ class CheckoutGuardTests(FlowFixtureMixin, TestCase):
 
     @override_settings(RAZORPAY_KEY_ID="rzp_live", RAZORPAY_KEY_SECRET="secret", RAZORPAY_MOCK=False)
     def test_live_payment_page_leaves_method_choice_to_razorpay(self):
-        hold = self.make("DG-GRD-0011", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold = self.make("DG-GRD-0011", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, driver=True)
         with patch("rental.views.create_razorpay_order", return_value={"id": "order_live_1"}):
             body = _login("user_flow").get(f"/payment/{hold.booking_id}/").content.decode()
         self.assertIn("checkout.razorpay.com", body)
@@ -1246,7 +1208,7 @@ class CheckoutGuardTests(FlowFixtureMixin, TestCase):
 
     @override_settings(RAZORPAY_KEY_ID="rzp_live", RAZORPAY_KEY_SECRET="secret", RAZORPAY_MOCK=False)
     def test_payment_method_comes_from_razorpay(self):
-        hold = self.make("DG-GRD-0012", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold = self.make("DG-GRD-0012", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, driver=True)
         hold.razorpay_order_id = "order_live_2"
         hold.save(update_fields=["razorpay_order_id"])
         remote = {"amount": int(hold.total_amount * 100), "order_id": "order_live_2", "method": "upi"}
@@ -1261,7 +1223,7 @@ class CheckoutGuardTests(FlowFixtureMixin, TestCase):
 
     @override_settings(RAZORPAY_KEY_ID="rzp_live", RAZORPAY_KEY_SECRET="secret", RAZORPAY_MOCK=False)
     def test_payment_for_another_order_is_rejected(self):
-        hold = self.make("DG-GRD-0013", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold = self.make("DG-GRD-0013", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, driver=True)
         hold.razorpay_order_id = "order_live_3"
         hold.save(update_fields=["razorpay_order_id"])
         remote = {"amount": int(hold.total_amount * 100), "order_id": "order_someone_else", "method": "upi"}
@@ -1276,7 +1238,7 @@ class CheckoutGuardTests(FlowFixtureMixin, TestCase):
 
     @override_settings(RAZORPAY_KEY_ID="rzp_live", RAZORPAY_KEY_SECRET="secret", RAZORPAY_MOCK=False)
     def test_mock_order_rejected_once_demo_mode_is_off(self):
-        hold = self.make("DG-GRD-0009", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold = self.make("DG-GRD-0009", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, driver=True)
         hold.razorpay_order_id = "order_mock_DG-GRD-0009"
         hold.save(update_fields=["razorpay_order_id"])
         response = _login("user_flow").post("/payment/verify/", data=json.dumps({
@@ -1287,59 +1249,25 @@ class CheckoutGuardTests(FlowFixtureMixin, TestCase):
         hold.refresh_from_db()
         self.assertNotEqual(hold.payment_status, Booking.PaymentStatus.PAID)
 
-    def test_document_upload_sends_file_bytes_to_storage(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
-        hold = self.make("DG-GRD-0010", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
-        captured = {}
-
-        def fake_upload(uploaded, path):
-            uploaded.seek(0)
-            captured[path] = uploaded.read()
-            return f"documents/{path}"
-
-        with patch("rental.views.upload_document_file", side_effect=fake_upload):
-            response = _login("user_flow").post(f"/verification/{hold.booking_id}/", {
-                "driving_license": SimpleUploadedFile("my license.png", b"PNGDATA", content_type="image/png"),
-                "govt_id": SimpleUploadedFile("id.pdf", b"%PDF-1", content_type="application/pdf"),
-            })
-        self.assertRedirects(response, f"/delivery/{hold.booking_id}/", fetch_redirect_response=False)
-        self.assertIn(b"PNGDATA", captured.values())
-        doc = hold.documents.get(document_type=Document.DocType.DRIVING_LICENSE)
-        self.assertTrue(doc.file_reference.startswith("documents/"))
-        self.assertNotIn(" ", doc.file_reference)
-
-    def test_rejected_document_must_be_replaced(self):
-        paid = self.make("DG-GRD-0011", status=Booking.Status.PENDING_VERIFICATION, docs=True)
-        paid.documents.filter(document_type=Document.DocType.GOVT_ID).update(
-            verification_status=Document.VerificationStatus.REJECTED, rejection_reason="Blurry")
-        client = _login("user_flow")
-        page = client.get(f"/verification/{paid.booking_id}/")
-        self.assertContains(page, "Blurry")
-        response = client.post(f"/verification/{paid.booking_id}/", {})
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Still required")
-
-
 class CustomerPagesRenderTests(FlowFixtureMixin, TestCase):
     def test_every_checkout_step_renders(self):
-        hold = self.make("DG-RND-0001", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, docs=True)
+        hold = self.make("DG-RND-0001", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING, driver=True)
         client = _login("user_flow")
         free = timezone.localdate() + timedelta(days=20)
         for url in (f"/booking/{self.car.pk}/?" + "&".join(f"{k}={v}" for k, v in self.dates(free, 2).items()),
-                    f"/verification/{hold.booking_id}/", f"/delivery/{hold.booking_id}/",
+                    f"/driver/{hold.booking_id}/", f"/delivery/{hold.booking_id}/",
                     f"/summary/{hold.booking_id}/", f"/payment/{hold.booking_id}/"):
             with self.subTest(url=url):
                 self.assertEqual(client.get(url).status_code, 200)
 
     def test_confirmation_and_my_bookings_render(self):
-        paid = self.make("DG-RND-0002", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        paid = self.make("DG-RND-0002", status=Booking.Status.PENDING_VERIFICATION, driver=True)
         hold = self.make("DG-RND-0003", days_from_now=30, status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
         client = _login("user_flow")
-        self.assertContains(client.get(f"/confirmation/{paid.booking_id}/"), "verifying documents")
+        self.assertContains(client.get(f"/confirmation/{paid.booking_id}/"), "Licence checked")
         html = client.get("/my-bookings/").content.decode()
         self.assertIn("Continue booking", html)
-        self.assertIn(f'href="/verification/{hold.booking_id}/"', html)
+        self.assertIn(f'href="/driver/{hold.booking_id}/"', html)
         for page in ("/", "/cars/", f"/cars/{self.car.pk}/"):
             with self.subTest(page=page):
                 self.assertEqual(Client().get(page).status_code, 200)
@@ -1378,36 +1306,22 @@ class AdminConsoleTests(FlowFixtureMixin, TestCase):
         return client
 
     def test_all_admin_pages_render(self):
-        b = self.make("DG-ADC-0001", status=Booking.Status.PENDING_VERIFICATION, docs=True)
+        b = self.make("DG-ADC-0001", status=Booking.Status.PENDING_VERIFICATION, driver=True)
         CarBlock.objects.create(car=self.car, start_datetime=self.now + timedelta(days=40), end_datetime=self.now + timedelta(days=41))
         client = self.admin_client()
-        pages = ["/dashboard/", "/dashboard/verifications/", "/dashboard/customers/?q=flow", "/dashboard/cars/",
+        pages = ["/dashboard/", "/dashboard/drivers/", "/dashboard/customers/?q=flow", "/dashboard/cars/",
                  "/dashboard/locations/", "/dashboard/blocks/", f"/dashboard/bookings/{b.booking_id}/"]
-        pages += [f"/dashboard/bookings/?status={key}" for key in ("active", "verification", "confirmed", "on_trip", "completed", "cancelled", "all")]
+        pages += [f"/dashboard/bookings/?status={key}" for key in ("active", "other_driver", "confirmed", "on_trip", "completed", "cancelled", "all")]
         for url in pages:
             with self.subTest(url=url):
                 self.assertEqual(client.get(url).status_code, 200)
         self.assertContains(client.get("/dashboard/bookings/?status=all&q=Flow User"), b.booking_id)
 
     def test_actions_redirect_back_to_referring_page(self):
-        b = self.make("DG-ADC-0002", status=Booking.Status.PENDING_VERIFICATION, docs=True)
-        response = self.admin_client().post(f"/dashboard/bookings/{b.booking_id}/docs/approve/",
+        b = self.make("DG-ADC-0002", status=Booking.Status.PENDING_VERIFICATION, driver=True)
+        response = self.admin_client().post(f"/dashboard/bookings/{b.booking_id}/note/", {"note": "Called the customer"},
                                      HTTP_REFERER=f"http://testserver/dashboard/bookings/{b.booking_id}/")
         self.assertEqual(response["Location"], f"http://testserver/dashboard/bookings/{b.booking_id}/")
-
-    def test_approve_refuses_when_a_document_is_missing(self):
-        b = self.make("DG-ADC-0003", status=Booking.Status.PENDING_VERIFICATION)
-        Document.objects.create(booking=b, document_type=Document.DocType.DRIVING_LICENSE, file="")
-        self.admin_client().post(f"/dashboard/bookings/{b.booking_id}/docs/approve/")
-        b.refresh_from_db()
-        self.assertEqual(b.status, Booking.Status.PENDING_VERIFICATION)
-        self.assertFalse(b.documents.filter(verification_status=Document.VerificationStatus.VERIFIED).exists())
-
-    def test_approving_docs_does_not_revert_active_trip(self):
-        b = self.make("DG-ADC-0004", days_from_now=-1, status=Booking.Status.ACTIVE, docs=True)
-        self.admin_client().post(f"/dashboard/bookings/{b.booking_id}/docs/approve/")
-        b.refresh_from_db()
-        self.assertEqual(b.status, Booking.Status.ACTIVE)
 
     def test_edit_car_and_duplicate_registration(self):
         other = Car.objects.create(location=self.loc, brand="Tata", model="Nexon", registration_number="WB06F0002")
@@ -1435,56 +1349,6 @@ class AdminConsoleTests(FlowFixtureMixin, TestCase):
         block = CarBlock.objects.create(car=self.car, start_datetime=self.now, end_datetime=self.now + timedelta(days=1))
         client.post(f"/dashboard/blocks/{block.pk}/delete/")
         self.assertFalse(CarBlock.objects.filter(pk=block.pk).exists())
-
-    def test_admin_document_view_requires_admin(self):
-        b = self.make("DG-ADC-0005", status=Booking.Status.PENDING_VERIFICATION, docs=True)
-        doc = b.documents.first()
-        Document.objects.filter(pk=doc.pk).update(file_reference="documents/DG-ADC-0005/GOVT_ID_scan.pdf")
-        self.assertEqual(_login("user_flow").get(f"/dashboard/documents/{doc.pk}/").status_code, 302)
-        with patch("rental.views.fetch_document_bytes", return_value=b"%PDF-1.7 test"):
-            response = self.admin_client().get(f"/dashboard/documents/{doc.pk}/")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, b"%PDF-1.7 test")
-        self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertTrue(response["Content-Disposition"].startswith("inline"))
-        # The admin modal frames this response; DENY makes Chrome show "Failed to load PDF document".
-        self.assertEqual(response["X-Frame-Options"], "SAMEORIGIN")
-
-    def test_admin_document_falls_back_to_local_copy_when_remote_is_empty(self):
-        from django.core.files.base import ContentFile
-
-        b = self.make("DG-ADC-0006", status=Booking.Status.PENDING_VERIFICATION)
-        with self.settings(MEDIA_ROOT=self._tmp_media()):
-            doc = Document(booking=b, document_type=Document.DocType.GOVT_ID, file_reference="documents/x/GOVT_ID_id.png")
-            doc.file.save("id.png", ContentFile(b"PNGBYTES"), save=True)
-            with patch("rental.views.fetch_document_bytes", return_value=b""):
-                response = self.admin_client().get(f"/dashboard/documents/{doc.pk}/")
-        self.assertEqual(response.content, b"PNGBYTES")
-        self.assertEqual(response["Content-Type"], "image/png")
-
-    def test_admin_document_never_serves_html_inline(self):
-        b = self.make("DG-ADC-0007", status=Booking.Status.PENDING_VERIFICATION, docs=True)
-        doc = b.documents.first()
-        Document.objects.filter(pk=doc.pk).update(file_reference="documents/x/evil.html")
-        with patch("rental.views.fetch_document_bytes", return_value=b"<script>alert(1)</script>"):
-            response = self.admin_client().get(f"/dashboard/documents/{doc.pk}/")
-        self.assertEqual(response["Content-Type"], "application/octet-stream")
-        self.assertTrue(response["Content-Disposition"].startswith("attachment"))
-
-    def test_admin_document_missing_file_explains_itself(self):
-        b = self.make("DG-ADC-0008", status=Booking.Status.PENDING_VERIFICATION, docs=True)
-        response = self.admin_client().get(f"/dashboard/documents/{b.documents.first().pk}/")
-        self.assertEqual(response.status_code, 404)
-        self.assertContains(response, "missing or empty", status_code=404)
-
-    def _tmp_media(self):
-        import shutil
-        import tempfile
-
-        path = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, path, ignore_errors=True)
-        return path
-
 
 class TemplateFilterTests(TestCase):
     def test_indian_number_grouping(self):
@@ -1729,3 +1593,145 @@ class PageQueryCountTests(TestCase):
             self.assertLess(len(ctx.captured_queries), limit, f"{len(ctx.captured_queries)} queries")
 
         return check()
+
+
+class LicenceCheckTests(TestCase):
+    """The rules that replaced the document upload."""
+
+    def setUp(self):
+        from datetime import date
+
+        self.today = date(2026, 6, 1)
+        self.born = date(1995, 4, 12)
+        self.valid = date(2030, 1, 1)
+
+    def check(self, number="WB0120150012345", dob=None, expiry=None, trip_end=None):
+        from .verification import check_licence
+
+        return check_licence(number, dob or self.born, expiry or self.valid,
+                             trip_start=self.today, trip_end=trip_end or self.today, today=self.today)
+
+    def test_a_well_formed_licence_passes(self):
+        result = self.check()
+        self.assertTrue(result.ok)
+        self.assertEqual(result.state, "WB")
+        self.assertIn("West Bengal", result.message)
+
+    def test_spaces_and_dashes_are_accepted(self):
+        self.assertTrue(self.check("wb01-2015 0012345").ok)
+
+    def test_a_short_number_is_rejected(self):
+        result = self.check("WB01234")
+        self.assertFalse(result.ok)
+        self.assertEqual(result.field, "licence_number")
+
+    def test_an_unknown_state_code_is_rejected(self):
+        result = self.check("ZZ0120150012345")
+        self.assertFalse(result.ok)
+        self.assertIn("not an Indian state code", result.message)
+
+    def test_a_driver_under_18_is_rejected(self):
+        from datetime import date
+
+        result = self.check(dob=date(2015, 1, 1))
+        self.assertFalse(result.ok)
+        self.assertEqual(result.field, "date_of_birth")
+
+    def test_an_expired_licence_is_rejected(self):
+        from datetime import date
+
+        result = self.check(expiry=date(2025, 1, 1))
+        self.assertFalse(result.ok)
+        self.assertIn("expired", result.message)
+
+    def test_a_licence_expiring_mid_trip_is_rejected(self):
+        from datetime import date
+
+        result = self.check(expiry=date(2026, 6, 10), trip_end=date(2026, 6, 20))
+        self.assertFalse(result.ok)
+        self.assertIn("before the trip ends", result.message)
+
+    def test_an_issue_year_before_the_driver_turned_18_is_rejected(self):
+        from datetime import date
+
+        result = self.check("WB0119990012345", dob=date(1995, 4, 12))
+        self.assertFalse(result.ok)
+        self.assertIn("do not match", result.message)
+
+    def test_formatting_matches_the_printed_card(self):
+        from .verification import format_licence
+
+        self.assertEqual(format_licence("wb0120150012345"), "WB01 20150012345")
+
+
+class DriverStepTests(FlowFixtureMixin, TestCase):
+    def hold(self, bid="DG-DRV-0001"):
+        return self.make(bid, status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
+
+    def test_valid_licence_saves_the_booking_and_the_profile(self):
+        hold = self.hold()
+        response = _login("user_flow").post(f"/driver/{hold.booking_id}/", _driver_post())
+        self.assertRedirects(response, f"/delivery/{hold.booking_id}/", fetch_redirect_response=False)
+        hold.refresh_from_db()
+        self.assertTrue(hold.driver_checked)
+        self.assertEqual(hold.driver_licence_number, "WB0120150012345")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.licence_number, "WB0120150012345")
+
+    def test_a_bad_licence_number_keeps_the_customer_on_the_step(self):
+        hold = self.hold("DG-DRV-0002")
+        response = _login("user_flow").post(f"/driver/{hold.booking_id}/", _driver_post(number="ABCD"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "as it is printed")
+        hold.refresh_from_db()
+        self.assertFalse(hold.driver_checked)
+
+    def test_a_licence_expiring_before_the_trip_ends_is_refused(self):
+        hold = self.hold("DG-DRV-0003")
+        early = (timezone.localdate(hold.dropoff_datetime) - timedelta(days=1)).isoformat()
+        response = _login("user_flow").post(f"/driver/{hold.booking_id}/", _driver_post(expiry=early))
+        self.assertContains(response, "before the trip ends")
+
+    def test_someone_else_driving_is_recorded_on_the_booking_only(self):
+        hold = self.hold("DG-DRV-0004")
+        _login("user_flow").post(f"/driver/{hold.booking_id}/", _driver_post(
+            choice="OTHER", name="Riya Sen", number="MH12 20180012345"))
+        hold.refresh_from_db()
+        self.assertEqual(hold.driver_choice, "OTHER")
+        self.assertEqual(hold.driver_name, "Riya Sen")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.licence_number, "")
+
+    def test_a_saved_licence_prefills_the_form(self):
+        _login("user_flow").post(f"/driver/{self.hold().booking_id}/", _driver_post())
+        second = self.hold("DG-DRV-0005")
+        body = _login("user_flow").get(f"/driver/{second.booking_id}/").content.decode()
+        self.assertIn("WB01 20150012345", body)
+
+    def test_paid_bookings_cannot_change_the_driver(self):
+        paid = self.make("DG-DRV-0006", driver=True)
+        response = _login("user_flow").post(f"/driver/{paid.booking_id}/", _driver_post(name="Someone Else"))
+        self.assertRedirects(response, f"/confirmation/{paid.booking_id}/", fetch_redirect_response=False)
+        paid.refresh_from_db()
+        self.assertEqual(paid.driver_name, "Flow User")
+
+
+class AdminDriverChecksTests(FlowFixtureMixin, TestCase):
+    def test_page_lists_upcoming_drivers_and_filters_to_someone_else(self):
+        mine = self.make("DG-ADV-0001", driver=True)
+        other = self.make("DG-ADV-0002", driver=True)
+        _add_driver(other, choice="OTHER", name="Riya Sen", number="MH1220180012345")
+        client = _login("user_flow_admin")
+        body = client.get("/dashboard/drivers/").content.decode()
+        self.assertIn(mine.booking_id, body)
+        self.assertIn("WB01 20150012345", body)
+        self.assertIn("Riya Sen", body)
+        filtered = client.get("/dashboard/drivers/?who=other").content.decode()
+        self.assertIn(other.booking_id, filtered)
+        self.assertNotIn(mine.booking_id, filtered)
+
+    def test_booking_detail_shows_the_licence(self):
+        b = self.make("DG-ADV-0003", driver=True)
+        body = _login("user_flow_admin").get(f"/dashboard/bookings/{b.booking_id}/").content.decode()
+        self.assertIn("WB01 20150012345", body)
+        self.assertIn("12 Apr 1995", body)

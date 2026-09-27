@@ -1,4 +1,6 @@
 import re
+
+from ..verification import format_licence
 from decimal import Decimal, InvalidOperation
 
 from django import template
@@ -80,3 +82,9 @@ def thumb(url, width=500):
     if "upload.wikimedia.org" in url and "/thumb/" in url:
         return re.sub(r"/\d+px-([^/]+)$", rf"/{width}px-\1", url)
     return url
+
+
+@register.filter
+def licence(number):
+    """WB0120150012345 → WB01 20150012345."""
+    return format_licence(number) if number else ""

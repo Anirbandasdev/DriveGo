@@ -167,6 +167,12 @@ class Customer(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     profile_image_url = models.URLField(blank=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="CUSTOMER")
+    # Licence details checked once and reused on later bookings.
+    licence_number = models.CharField(max_length=20, blank=True)
+    licence_name = models.CharField(max_length=120, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    licence_expiry = models.DateField(null=True, blank=True)
+    licence_checked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -178,6 +184,10 @@ class Customer(models.Model):
     @property
     def is_admin(self):
         return self.role == "ADMIN"
+
+    def licence_valid_until(self, end):
+        """True when we hold a checked licence that is still valid on ``end``."""
+        return bool(self.licence_checked_at and self.licence_expiry and self.licence_expiry >= end)
 
 
 class Booking(models.Model):
@@ -197,6 +207,7 @@ class Booking(models.Model):
         REFUNDED = "REFUNDED", "Refunded"
 
     DELIVERY_CHOICES = [("STORE_PICKUP", "Pickup from Store"), ("HOME_DELIVERY", "Home Delivery")]
+    DRIVER_CHOICES = [("SELF", "I will drive"), ("OTHER", "Someone else will drive")]
 
     booking_id = models.CharField(max_length=20, unique=True, editable=False)
     user = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name="bookings")
@@ -218,6 +229,12 @@ class Booking(models.Model):
     razorpay_order_id = models.CharField(max_length=100, blank=True, null=True, unique=True)
     razorpay_payment_id = models.CharField(max_length=100, blank=True)
     payment_method = models.CharField(max_length=30, blank=True)
+    driver_choice = models.CharField(max_length=10, choices=DRIVER_CHOICES, default="SELF")
+    driver_name = models.CharField(max_length=120, blank=True)
+    driver_licence_number = models.CharField(max_length=20, blank=True)
+    driver_date_of_birth = models.DateField(null=True, blank=True)
+    driver_licence_expiry = models.DateField(null=True, blank=True)
+    driver_checked_at = models.DateTimeField(null=True, blank=True)
     admin_note = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -273,21 +290,36 @@ class Booking(models.Model):
             return None
         return self.created_at + timedelta(minutes=getattr(settings, "BOOKING_HOLD_MINUTES", 60))
 
-    def document_map(self):
-        return {d.document_type: d for d in self.documents.all()}
+    @property
+    def driver_checked(self):
+        return bool(self.driver_checked_at and self.driver_licence_number)
 
-    def missing_documents(self):
-        have = self.document_map()
-        return [label for value, label in Document.DocType.choices if value not in have]
+    @property
+    def driver_is_self(self):
+        return self.driver_choice == "SELF"
 
-    def rejected_documents(self):
-        return [d for d in self.documents.all() if d.verification_status == Document.VerificationStatus.REJECTED]
+    def set_driver(self, choice, name, licence_number, date_of_birth, licence_expiry):
+        """Record the licence this trip was booked on. A snapshot: later profile edits leave it alone."""
+        self.driver_choice = choice
+        self.driver_name = name
+        self.driver_licence_number = licence_number
+        self.driver_date_of_birth = date_of_birth
+        self.driver_licence_expiry = licence_expiry
+        self.driver_checked_at = timezone.now()
 
-    def documents_verified(self):
-        docs = self.document_map()
-        return len(docs) == len(Document.DocType.choices) and all(
-            d.verification_status == Document.VerificationStatus.VERIFIED for d in docs.values()
-        )
+    def copy_driver_from(self, other):
+        """Carry driver details over to a replacement hold, or from the customer's profile."""
+        if isinstance(other, Customer):
+            if not other.licence_valid_until(timezone.localdate(self.dropoff_datetime)):
+                return False
+            self.set_driver("SELF", other.licence_name or other.full_name, other.licence_number,
+                            other.date_of_birth, other.licence_expiry)
+            return True
+        if not other.driver_checked:
+            return False
+        self.set_driver(other.driver_choice, other.driver_name, other.driver_licence_number,
+                        other.driver_date_of_birth, other.driver_licence_expiry)
+        return True
 
     @property
     def customer_can_cancel(self):
@@ -302,9 +334,9 @@ class Booking(models.Model):
         if self.is_closed:
             return None
         if self.is_paid:
-            return "verification" if self.rejected_documents() else "confirmation"
-        if self.missing_documents() or self.rejected_documents():
-            return "verification"
+            return "confirmation"
+        if not self.driver_checked:
+            return "driver"
         return "summary"
 
     @classmethod
@@ -313,46 +345,6 @@ class Booking(models.Model):
         if exclude_id:
             qs = qs.exclude(pk=exclude_id)
         return qs
-
-
-def booking_document_path(instance, filename):
-    return f"documents/{instance.booking.booking_id}/{instance.document_type}_{filename}"
-
-
-class Document(models.Model):
-    class DocType(models.TextChoices):
-        DRIVING_LICENSE = "DRIVING_LICENSE", "Driving License"
-        GOVT_ID = "GOVT_ID", "Government ID"
-
-    class VerificationStatus(models.TextChoices):
-        PENDING = "PENDING", "Pending"
-        VERIFIED = "VERIFIED", "Verified"
-        REJECTED = "REJECTED", "Rejected"
-
-    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="documents")
-    document_type = models.CharField(max_length=20, choices=DocType.choices)
-    file = models.FileField(upload_to=booking_document_path)
-    file_reference = models.CharField(max_length=500, blank=True, help_text="Supabase Storage path when remote storage is configured")
-    verification_status = models.CharField(max_length=20, choices=VerificationStatus.choices, default=VerificationStatus.PENDING)
-    rejection_reason = models.CharField(max_length=300, blank=True, default="")
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-    verified_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = "documents"
-        unique_together = [("booking", "document_type")]
-
-    def __str__(self):
-        return f"{self.booking.booking_id} / {self.get_document_type_display()}"
-
-    @property
-    def storage_name(self):
-        return self.file_reference or (self.file.name if self.file else "")
-
-    @property
-    def is_pdf(self):
-        return self.storage_name.lower().endswith(".pdf")
-
 
 
 class CarBlock(models.Model):

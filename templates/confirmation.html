@@ -13,20 +13,11 @@
     </span>
     <div>
       <span class="done-kicker">Booking {{ booking.booking_id }}</span>
-      <h1>{% if booking.status == 'PENDING_VERIFICATION' %}Payment received — verifying documents{% elif booking.status == 'CONFIRMED' %}You're all set!{% elif booking.status == 'ACTIVE' %}Enjoy your trip{% else %}Trip completed{% endif %}</h1>
-      <p>{% if booking.status == 'PENDING_VERIFICATION' %}{% if rejected_docs %}One or more documents need a new copy before we can confirm.{% else %}Our team is checking your documents. You'll get an email the moment it's confirmed — usually within a few hours.{% endif %}{% elif booking.status == 'CONFIRMED' %}Your {{ car.brand }} {{ car.model }} is reserved. A confirmation email is on its way to {{ booking.user.email|default:"your inbox" }}.{% elif booking.status == 'ACTIVE' %}Return the car to {{ booking.pickup_location.name }} by {{ booking.dropoff_datetime|date:"D d M, h:i A" }}.{% else %}Thanks for driving with DriveGo.{% endif %}</p>
+      <h1>{% if booking.status == 'PENDING_VERIFICATION' %}Payment received{% elif booking.status == 'CONFIRMED' %}You're all set!{% elif booking.status == 'ACTIVE' %}Enjoy your trip{% else %}Trip completed{% endif %}</h1>
+      <p>{% if booking.status == 'PENDING_VERIFICATION' %}Our team is finishing the last check on this booking.{% elif booking.status == 'CONFIRMED' %}Your {{ car.brand }} {{ car.model }} is reserved. A confirmation email is on its way to {{ booking.user.email|default:"your inbox" }}.{% elif booking.status == 'ACTIVE' %}Return the car to {{ booking.pickup_location.name }} by {{ booking.dropoff_datetime|date:"D d M, h:i A" }}.{% else %}Thanks for driving with DriveGo.{% endif %}</p>
     </div>
     <span class="pill tone-{{ booking.status|tone }}">{{ booking.status|customer_status }}</span>
   </header>
-
-  {% if rejected_docs %}
-  <div class="co-alert is-error done-alert">
-    <div><b>Action needed:</b>
-      <ul>{% for d in rejected_docs %}<li>{{ d.get_document_type_display }} — {{ d.rejection_reason|default:"please upload a clearer copy" }}</li>{% endfor %}</ul>
-    </div>
-    <a class="btn btn-primary btn-sm" href="{% url 'verification' booking.booking_id %}">Re-upload</a>
-  </div>
-  {% endif %}
 
   {% if booking.admin_note %}
   <div class="co-alert is-info done-alert"><div><b>Message from DriveGo:</b> {{ booking.admin_note }}</div></div>
@@ -55,9 +46,9 @@
       <h2 class="co-card-title">What happens next</h2>
       <ol class="next-steps">
         <li class="is-done"><b>Payment received</b><span>₹{{ booking.total_amount|inr }} on {{ booking.created_at|date:"d M" }}</span></li>
-        <li class="{% if booking.status == 'PENDING_VERIFICATION' %}is-now{% else %}is-done{% endif %}"><b>Documents verified</b>
-          <span>{% for d in docs %}{{ d.get_document_type_display }}: {{ d.get_verification_status_display|lower }}{% if not forloop.last %} · {% endif %}{% empty %}No documents uploaded{% endfor %}</span></li>
-        <li class="{% if booking.status == 'CONFIRMED' %}is-now{% elif booking.status == 'ACTIVE' or booking.status == 'COMPLETED' %}is-done{% endif %}"><b>{% if booking.delivery_method == 'HOME_DELIVERY' %}Car delivered{% else %}Pick up the car{% endif %}</b><span>{{ booking.pickup_datetime|date:"D d M, h:i A" }} · bring your original license</span></li>
+        <li class="is-done"><b>Licence checked</b>
+          <span>{{ booking.driver_name }} · {{ booking.driver_licence_number|licence }}{% if not booking.driver_is_self %} (driving on your booking){% endif %}</span></li>
+        <li class="{% if booking.status == 'CONFIRMED' %}is-now{% elif booking.status == 'ACTIVE' or booking.status == 'COMPLETED' %}is-done{% endif %}"><b>{% if booking.delivery_method == 'HOME_DELIVERY' %}Car delivered{% else %}Pick up the car{% endif %}</b><span>{{ booking.pickup_datetime|date:"D d M, h:i A" }} · {{ booking.driver_name }} must bring the original licence</span></li>
         <li class="{% if booking.status == 'ACTIVE' %}is-now{% elif booking.status == 'COMPLETED' %}is-done{% endif %}"><b>Return</b><span>{{ booking.dropoff_datetime|date:"D d M, h:i A" }} at {{ booking.pickup_location.name }}</span></li>
       </ol>
       {% if booking.pickup_location.phone %}<p class="co-privacy">Questions? Call {{ booking.pickup_location.name }} at <a href="tel:{{ booking.pickup_location.phone }}">{{ booking.pickup_location.phone }}</a>.</p>{% endif %}

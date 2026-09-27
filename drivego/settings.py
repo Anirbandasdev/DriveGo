@@ -89,8 +89,6 @@ STORAGES = {
     # Adds ?v=<content hash> to static URLs so browsers can cache them for a year.
     "staticfiles": {"BACKEND": "rental.storage.VersionedStaticFilesStorage"},
 }
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "/login/"
@@ -101,7 +99,6 @@ CLERK_PUBLISHABLE_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", os.environ.get("
 CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-SUPABASE_DOC_BUCKET = os.environ.get("SUPABASE_DOC_BUCKET", "documents")
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 RAZORPAY_MOCK = not (RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)

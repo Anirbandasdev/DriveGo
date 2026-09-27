@@ -197,53 +197,6 @@ def process_refund(booking):
         return False
 
 
-def _read_upload(uploaded_file):
-    uploaded_file.seek(0)
-    return uploaded_file.read()
-
-
-def fetch_document_bytes(file_reference):
-    """Download a Supabase Storage object (``bucket/path``) with the service key.
-
-    Works for private and public buckets. Returns ``b""`` when storage isn't
-    configured, the object is missing, or the request fails.
-    """
-    if not (settings.SUPABASE_URL and settings.SUPABASE_KEY and file_reference):
-        return b""
-    try:
-        resp = requests.get(
-            f"{settings.SUPABASE_URL}/storage/v1/object/{file_reference}",
-            headers={"apikey": settings.SUPABASE_KEY, "Authorization": f"Bearer {settings.SUPABASE_KEY}"},
-            timeout=20,
-        )
-    except requests.RequestException:
-        logger.exception("Supabase download failed for %s", file_reference)
-        return b""
-    if resp.status_code != 200:
-        logger.warning("Supabase download rejected for %s: %s", file_reference, resp.status_code)
-        return b""
-    return resp.content
-
-
-def upload_document_file(uploaded_file, remote_path):
-    if not (settings.SUPABASE_URL and settings.SUPABASE_KEY):
-        return ""
-    try:
-        resp = requests.post(
-            f"{settings.SUPABASE_URL}/storage/v1/object/{settings.SUPABASE_DOC_BUCKET}/{remote_path}",
-            headers={"apikey": settings.SUPABASE_KEY, "Authorization": f"Bearer {settings.SUPABASE_KEY}", "Content-Type": uploaded_file.content_type or "application/octet-stream"},
-            data=_read_upload(uploaded_file),
-            timeout=30,
-        )
-    except requests.RequestException:
-        logger.exception("Supabase upload failed")
-        return ""
-    if resp.status_code in (200, 201):
-        return f"{settings.SUPABASE_DOC_BUCKET}/{remote_path}"
-    logger.warning("Supabase upload rejected: %s %s", resp.status_code, resp.text[:200])
-    return ""
-
-
 def send_booking_confirmation_email(booking):
     subject = f"DriveGo Booking Confirmation {booking.booking_id}"
     lines = [

@@ -45,14 +45,13 @@
           <div><small>Return</small><b>{{ b.dropoff_datetime|date:"D d M, h:i A" }}</b></div>
         </div>
         {% if b.status == 'PENDING' %}<p class="mb-note">Reserved until {{ b.hold_expires_at|date:"h:i A" }} — finish checkout to keep it.</p>
-        {% elif b.checkout_step == 'verification' and b.is_paid %}<p class="mb-note is-error">A document was rejected. Upload a new copy to confirm your trip.</p>
         {% elif b.admin_note %}<p class="mb-note">{{ b.admin_note }}</p>{% endif %}
       </div>
       <div class="mb-side">
         <div class="mb-amount"><b>₹{{ b.total_amount|inr }}</b><span>{{ b.get_payment_status_display }}</span></div>
         <div class="mb-actions">
           {% if b.resume_url and not b.is_paid %}<a class="btn btn-primary btn-sm" href="{{ b.resume_url }}">Continue booking</a>
-          {% elif b.resume_url %}<a class="btn btn-ghost btn-sm" href="{{ b.resume_url }}">{% if b.checkout_step == 'verification' %}Re-upload{% else %}View{% endif %}</a>{% endif %}
+          {% elif b.resume_url %}<a class="btn btn-ghost btn-sm" href="{{ b.resume_url }}">View</a>{% endif %}
           {% if b.customer_can_cancel %}
           <form action="{% url 'cancel_booking' b.booking_id %}" method="post">{% csrf_token %}
             <input type="hidden" name="tab" value="{{ tab }}" />

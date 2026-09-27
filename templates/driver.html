@@ -1,0 +1,62 @@
+{% extends "checkout_base.html" %}
+{% block page %}driver{% endblock %}
+{% block title %}DriveGo - Driver details{% endblock %}
+{% block back_url %}{% url 'booking_dates' car.id %}?pickup_date={{ booking.pickup_datetime|date:'Y-m-d' }}&pickup_time={{ booking.pickup_datetime|date:'H:i' }}&drop_date={{ booking.dropoff_datetime|date:'Y-m-d' }}&drop_time={{ booking.dropoff_datetime|date:'H:i' }}{% endblock %}
+{% block back_label %}Change dates{% endblock %}
+{% block heading %}Who is driving?{% endblock %}
+{% block subheading %}We check the driving licence against the RTO number format, its expiry date and the driver's age. It takes a second — nothing to upload.{% endblock %}
+{% block step %}
+<form class="co-card dr" action="{% url 'driver' booking.booking_id %}" method="post">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="co-alert is-error">{% for e in form.non_field_errors %}{{ e }} {% endfor %}</div>{% endif %}
+
+  <div class="choice-grid" role="radiogroup" aria-label="Who is driving">
+    {% for radio in form.driver_choice %}
+    <label class="choice">
+      {{ radio.tag }}
+      <span>
+        <b>{{ radio.choice_label }}</b>
+        <small>{% if radio.data.value == 'SELF' %}The licence is in your name{% else %}A friend or family member drives{% endif %}</small>
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="dr-fields">
+    <div class="field">
+      <label for="{{ form.driver_name.id_for_label }}">Name on the licence</label>
+      <input type="text" name="driver_name" id="{{ form.driver_name.id_for_label }}" value="{{ form.driver_name.value|default:'' }}" maxlength="120" autocomplete="name" required />
+      {% for e in form.driver_name.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.licence_number.id_for_label }}">Driving licence number</label>
+      <input type="text" name="licence_number" id="{{ form.licence_number.id_for_label }}" value="{{ form.licence_number.value|default:'' }}" maxlength="20" placeholder="WB01 20150012345" spellcheck="false" required />
+      <p class="field-hint">As printed on the card: state code, RTO number, year and serial.</p>
+      {% for e in form.licence_number.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="{{ form.date_of_birth.id_for_label }}">Date of birth</label>
+        <input type="date" name="date_of_birth" id="{{ form.date_of_birth.id_for_label }}" value="{{ form.date_of_birth.value|date:'Y-m-d'|default:'' }}" required />
+        <p class="field-hint">The driver must be {{ min_age }} or older.</p>
+        {% for e in form.date_of_birth.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ form.expiry_date.id_for_label }}">Licence valid until</label>
+        <input type="date" name="expiry_date" id="{{ form.expiry_date.id_for_label }}" value="{{ form.expiry_date.value|date:'Y-m-d'|default:'' }}" required />
+        <p class="field-hint">Must cover {{ booking.dropoff_datetime|date:"d M Y" }}, when the trip ends.</p>
+        {% for e in form.expiry_date.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <p class="co-privacy"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Bring this licence when you collect the car — our staff match it against these details.</p>
+
+  <div class="co-actions">
+    <span></span>
+    <button class="btn btn-primary" type="submit">Check licence and continue</button>
+  </div>
+</form>
+{% endblock %}

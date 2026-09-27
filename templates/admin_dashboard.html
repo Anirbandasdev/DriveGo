@@ -24,10 +24,10 @@
     <b>{{ active_bookings }}</b>
     <small>{{ on_trip }} car{{ on_trip|pluralize }} on the road now</small>
   </div>
-  <a class="kpi{% if verification_count %} is-alert{% endif %}" href="{% url 'admin_verifications' %}">
-    <span>Needs review</span>
+  <a class="kpi" href="{% url 'admin_drivers' %}?who=other">
+    <span>Someone else driving</span>
     <b>{{ verification_count }}</b>
-    <small>{% if verification_count %}Paid bookings waiting on documents →{% else %}Queue is clear{% endif %}</small>
+    <small>{% if verification_count %}Upcoming trips driven by someone else →{% else %}Every driver is the customer{% endif %}</small>
   </a>
   <div class="kpi">
     <span>Fleet in service</span>

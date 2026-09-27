@@ -5,9 +5,8 @@ from django import forms
 from django.utils import timezone
 
 from .models import Booking
+from .verification import check_licence, normalise
 
-ALLOWED_DOC_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "application/pdf": ".pdf"}
-MAX_DOC_BYTES = 5 * 1024 * 1024
 MAX_RENTAL_DAYS = 60
 
 
@@ -54,22 +53,38 @@ class DeliveryForm(forms.Form):
         return cleaned
 
 
-class DocumentUploadForm(forms.Form):
-    driving_license = forms.FileField(required=False)
-    govt_id = forms.FileField(required=False)
+class DriverDetailsForm(forms.Form):
+    """Who is driving, and the licence we check them on."""
 
-    def clean_file(self, field_name):
-        uploaded = self.cleaned_data.get(field_name)
-        if not uploaded:
-            return None
-        if uploaded.content_type not in ALLOWED_DOC_TYPES:
-            raise forms.ValidationError("Accepted formats: JPG, PNG, PDF.")
-        if uploaded.size > MAX_DOC_BYTES:
-            raise forms.ValidationError("Maximum file size is 5 MB.")
-        return uploaded
+    driver_choice = forms.ChoiceField(choices=Booking.DRIVER_CHOICES, widget=forms.RadioSelect, initial="SELF")
+    driver_name = forms.CharField(max_length=120, label="Name as printed on the licence")
+    licence_number = forms.CharField(max_length=20, label="Driving licence number")
+    date_of_birth = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    expiry_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="Licence valid until")
 
-    def clean_driving_license(self):
-        return self.clean_file("driving_license")
+    def __init__(self, *args, trip_start=None, trip_end=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.trip_start = trip_start
+        self.trip_end = trip_end
 
-    def clean_govt_id(self):
-        return self.clean_file("govt_id")
+    def clean_driver_name(self):
+        name = " ".join(self.cleaned_data["driver_name"].split())
+        if len(name) < 3 or not re.fullmatch(r"[A-Za-z .'-]+", name):
+            raise forms.ValidationError("Enter the driver's name the way it is printed on the licence.")
+        return name
+
+    def clean_licence_number(self):
+        return normalise(self.cleaned_data["licence_number"])
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.errors:
+            return cleaned
+        result = check_licence(
+            cleaned.get("licence_number"), cleaned.get("date_of_birth"), cleaned.get("expiry_date"),
+            trip_start=self.trip_start, trip_end=self.trip_end,
+        )
+        if not result.ok:
+            self.add_error(result.field or None, result.message)
+        self.result = result
+        return cleaned

@@ -203,34 +203,6 @@ a.kpi:hover { border-color: var(--accent) }
 .setting-row p { font-size: .8rem; color: var(--muted); margin-top: 8px }
 .setting-row .pill { white-space: normal }
 
-/* ---- Verification queue ------------------------------------------------- */
-
-.vq { display: grid; gap: 12px }
-.vq-item { background: #fff; border: 1px solid #E4E7EC; border-left: 4px solid #F79009; border-radius: 14px; padding: 16px 18px }
-.vq-item.is-quiet { border-left-color: #D0D5DD }
-.vq-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap }
-.vq-head h3 { font-size: 1rem; font-weight: 800; margin-top: 2px }
-.vq-head p { font-size: .8rem; color: var(--muted) }
-.vq-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start }
-.vq-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 14px 0; padding: 12px; border-radius: 10px; background: #F9FAFB }
-.vq-facts dt { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted) }
-.vq-facts dd { font-size: .84rem; font-weight: 600 }
-
-.docs { display: flex; flex-wrap: wrap; gap: 10px }
-.adoc { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 10px; border-radius: 12px; border: 1px solid #E4E7EC; min-width: 220px; flex: 1 1 220px; max-width: 360px }
-.adoc-open { display: flex; align-items: center; gap: 10px; background: none; border: none; font: inherit; text-align: left; cursor: pointer; color: var(--ink); padding: 0; width: 100% }
-.adoc-open .ic { width: 36px; height: 36px; padding: 8px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); flex-shrink: 0 }
-.adoc-open b { display: block; font-size: .88rem }
-.adoc-open small { display: block; font-size: .74rem; color: var(--muted) }
-.adoc-open:hover b { color: var(--accent); text-decoration: underline }
-.adoc-reason { font-size: .78rem; color: var(--no) }
-
-.review-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid #F2F4F7 }
-.review-actions .reject { display: flex; gap: 8px; flex: 1; min-width: 240px }
-.review-actions .reject input { flex: 1; min-width: 0; padding: 8px 12px; font-size: .86rem; border-radius: 10px }
-
-.doc-modal-empty { text-align: center; color: var(--muted); padding: 40px 20px }
-
 /* ---- Booking detail ----------------------------------------------------- */
 
 .detail-car { display: flex; gap: 14px; align-items: center; margin-bottom: 14px }
@@ -287,7 +259,6 @@ a.kpi:hover { border-color: var(--accent) }
 @media (max-width: 1180px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) }
   .adm-grid-2, .adm-grid-2.is-wide-left { grid-template-columns: 1fr }
-  .vq-facts { grid-template-columns: repeat(2, minmax(0, 1fr)) }
 }
 
 @media (max-width: 900px) {
@@ -314,7 +285,6 @@ a.kpi:hover { border-color: var(--accent) }
   .adm-filter-search input { flex: 1; width: auto }
   .agenda li { grid-template-columns: 64px minmax(0, 1fr) }
   .agenda li form, .agenda li > .pill { grid-column: 2 }
-  .vq-facts { grid-template-columns: 1fr }
   .facts div { grid-template-columns: 90px minmax(0, 1fr) }
   .setting-row { flex-direction: column; align-items: stretch }
   .review-actions .reject { min-width: 0; flex-basis: 100% }

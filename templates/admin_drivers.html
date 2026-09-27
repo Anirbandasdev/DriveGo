@@ -1,0 +1,46 @@
+{% extends "admin_base.html" %}
+{% load rental_tags %}
+{% block admin_title %}DriveGo - Driver checks{% endblock %}
+{% block admin_content %}
+<header class="adm-head">
+  <div>
+    <h1>Driver checks</h1>
+    <p>The licence each upcoming trip was booked on. Checked automatically at booking — match the card against these details at handover.</p>
+  </div>
+  <div class="adm-head-actions">
+    <a class="btn {% if who == 'other' %}btn-ghost{% else %}btn-primary{% endif %} btn-sm" href="{% url 'admin_drivers' %}">All trips</a>
+    <a class="btn {% if who == 'other' %}btn-primary{% else %}btn-ghost{% endif %} btn-sm" href="{% url 'admin_drivers' %}?who=other">Someone else driving{% if watchlist_count %} ({{ watchlist_count }}){% endif %}</a>
+  </div>
+</header>
+
+<section class="adm-section">
+  <div class="table-scroll">
+    <table class="adm-table">
+      <thead><tr><th>Booking</th><th>Driver</th><th>Licence</th><th>Valid until</th><th>Trip</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for b in trips %}
+        <tr>
+          <td>
+            <a class="row-link" href="{% url 'admin_booking_detail' b.booking_id %}">{{ b.booking_id }}</a>
+            <small>{{ b.car }}</small>
+          </td>
+          <td>
+            <b>{{ b.driver_name|default:b.user }}</b>
+            <small>{% if b.driver_is_self %}Booked by the driver{% else %}Booked by {{ b.user }}{% endif %}</small>
+          </td>
+          <td>{{ b.driver_licence_number|licence|default:"—" }}</td>
+          <td>{{ b.driver_licence_expiry|date:"d M Y"|default:"—" }}</td>
+          <td>{{ b.pickup_datetime|date:"d M, h:i A" }}<small>to {{ b.dropoff_datetime|date:"d M, h:i A" }}</small></td>
+          <td>
+            <span class="pill tone-{{ b.status|tone }}">{{ b.get_status_display }}</span>
+            {% if not b.driver_is_self %}<span class="pill tone-warn">Someone else</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="empty">{% if who == 'other' %}No upcoming trip has someone else driving.{% else %}No upcoming trips.{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

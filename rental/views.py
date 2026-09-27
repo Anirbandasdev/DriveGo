@@ -8,31 +8,28 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Max, Q, Sum
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.utils.text import get_valid_filename
-from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
-from .forms import MAX_RENTAL_DAYS, BookingDatesForm, DeliveryForm, DocumentUploadForm
-from .models import Booking, Car, CarBlock, Customer, Document, Location, SiteSetting, overlapping
+from .forms import MAX_RENTAL_DAYS, BookingDatesForm, DeliveryForm, DriverDetailsForm
+from .models import Booking, Car, CarBlock, Customer, Location, SiteSetting, overlapping
 from .utils import (
     create_razorpay_order,
-    fetch_document_bytes,
     fetch_razorpay_payment,
     get_user_role,
     process_refund,
     send_booking_confirmation_email,
     set_user_role,
-    upload_document_file,
     verify_clerk_session_token,
     verify_clerk_user,
     verify_razorpay_signature,
 )
+from .verification import MIN_AGE, format_licence
 
 DEFAULT_PICKUP_TIME = "10:00"
 DEFAULT_DROP_TIME = "18:00"
@@ -471,20 +468,17 @@ def _checkout_booking(request, booking_id, step):
         messages.error(request, _no_longer_active_message(booking))
         return None, redirect("my_bookings")
     if booking.is_paid or booking.status == Booking.Status.COMPLETED:
-        if step != "verification" or not booking.rejected_documents():
-            return None, redirect("confirmation", booking_id=booking.booking_id)
-        return booking, None
+        return None, redirect("confirmation", booking_id=booking.booking_id)
     expired = _expire_hold(request, booking)
     if expired:
         return None, expired
-    if step in ("delivery", "summary", "payment"):
-        if booking.missing_documents() or booking.rejected_documents():
-            messages.info(request, "Upload your driving license and government ID to continue.")
-            return None, redirect("verification", booking_id=booking.booking_id)
+    if step in ("delivery", "summary", "payment") and not booking.driver_checked:
+        messages.info(request, "Tell us who is driving and we'll check the licence.")
+        return None, redirect("driver", booking_id=booking.booking_id)
     return booking, None
 
 
-CHECKOUT_STEPS = [("dates", "Dates"), ("verification", "Documents"), ("delivery", "Delivery"), ("summary", "Review"), ("payment", "Payment")]
+CHECKOUT_STEPS = [("dates", "Dates"), ("driver", "Driver"), ("delivery", "Delivery"), ("summary", "Review"), ("payment", "Payment")]
 
 
 def checkout_steps(current, car, booking=None):
@@ -529,7 +523,7 @@ def booking_dates(request, car_id):
                 info = availability_for(car_locked, pickup, drop, exclude)
                 if info["available"]:
                     # Replace the visitor's own overlapping unpaid holds instead of stacking them,
-                    # carrying over what they already filled in (documents, delivery choice).
+                    # carrying over what they already filled in (driver details, delivery choice).
                     replaced = list(Booking.objects.filter(
                         pk__in=exclude, pickup_datetime__lt=drop, dropoff_datetime__gt=pickup
                     ).order_by("-created_at"))
@@ -539,6 +533,10 @@ def booking_dates(request, car_id):
                     if previous:
                         for field in ("delivery_method", "delivery_address", "delivery_city", "delivery_pincode", "delivery_instructions"):
                             setattr(booking, field, getattr(previous, field))
+                        booking.copy_driver_from(previous)
+                    else:
+                        # A licence we checked on an earlier booking skips the driver step.
+                        booking.copy_driver_from(customer)
                     booking.apply_price()
                     for attempt in range(5):
                         booking.booking_id = generate_booking_id(offset=attempt)
@@ -554,7 +552,6 @@ def booking_dates(request, car_id):
                         form.add_error(None, "Could not create a booking right now. Please try again.")
                     if booking is not None and replaced:
                         Booking.objects.filter(pk__in=[b.pk for b in replaced]).update(status=Booking.Status.CANCELLED)
-                        Document.objects.filter(booking=previous).update(booking=booking)
             if booking is not None:
                 return redirect(booking.checkout_step, booking_id=booking.booking_id)
             if not form.errors:
@@ -575,62 +572,48 @@ def booking_dates(request, car_id):
     })
 
 
-def _store_document(booking, doc_type, uploaded):
-    safe_name = get_valid_filename(uploaded.name) or f"{doc_type.lower()}.bin"
-    ref = upload_document_file(uploaded, f"{booking.booking_id}/{doc_type}_{safe_name}")
-    defaults = {"verification_status": Document.VerificationStatus.PENDING, "verified_at": None, "rejection_reason": ""}
-    if ref:
-        defaults.update(file="", file_reference=ref)
-    else:
-        uploaded.seek(0)
-        uploaded.name = safe_name
-        defaults.update(file=uploaded, file_reference="")
-    Document.objects.update_or_create(booking=booking, document_type=doc_type, defaults=defaults)
-
-
 @customer_required
-def verification(request, booking_id):
-    booking, response = _checkout_booking(request, booking_id, "verification")
+def driver(request, booking_id):
+    """Who is driving, and the licence check we run on them."""
+    booking, response = _checkout_booking(request, booking_id, "driver")
     if response:
         return response
-    field_map = {"driving_license": Document.DocType.DRIVING_LICENSE, "govt_id": Document.DocType.GOVT_ID}
+    customer = get_customer(request)
+    trip_start = timezone.localdate(booking.pickup_datetime)
+    trip_end = timezone.localdate(booking.dropoff_datetime)
     if request.method == "POST":
-        form = DocumentUploadForm(request.POST, request.FILES)
+        form = DriverDetailsForm(request.POST, trip_start=trip_start, trip_end=trip_end)
         if form.is_valid():
-            uploaded_any = False
-            try:
-                for field, doc_type in field_map.items():
-                    uploaded = form.cleaned_data.get(field)
-                    if uploaded:
-                        _store_document(booking, doc_type, uploaded)
-                        uploaded_any = True
-            except OSError:
-                form.add_error(None, "We couldn't store your file. Please try again in a moment.")
-            if not form.errors:
-                still_needed = booking.missing_documents() + [f"a new {d.get_document_type_display()}" for d in booking.rejected_documents()]
-                if still_needed:
-                    form.add_error(None, ("Saved. " if uploaded_any else "") + "Still required: " + ", ".join(still_needed) + ".")
-                elif booking.is_paid:
-                    messages.success(request, "Documents re-submitted. Our team will review them shortly.")
-                    return redirect("confirmation", booking_id=booking.booking_id)
-                else:
-                    if uploaded_any:
-                        messages.success(request, "Documents uploaded.")
-                    return redirect("delivery", booking_id=booking.booking_id)
+            data = form.cleaned_data
+            booking.set_driver(data["driver_choice"], data["driver_name"], data["licence_number"],
+                               data["date_of_birth"], data["expiry_date"])
+            booking.save(update_fields=[
+                "driver_choice", "driver_name", "driver_licence_number",
+                "driver_date_of_birth", "driver_licence_expiry", "driver_checked_at",
+            ])
+            if booking.driver_is_self:
+                # Remember it so the next booking can skip this step.
+                customer.licence_number = data["licence_number"]
+                customer.licence_name = data["driver_name"]
+                customer.date_of_birth = data["date_of_birth"]
+                customer.licence_expiry = data["expiry_date"]
+                customer.licence_checked_at = booking.driver_checked_at
+                customer.save(update_fields=[
+                    "licence_number", "licence_name", "date_of_birth", "licence_expiry", "licence_checked_at",
+                ])
+            messages.success(request, form.result.message)
+            return redirect("delivery", booking_id=booking.booking_id)
     else:
-        form = DocumentUploadForm()
-    docs = booking.document_map()
-    return render(request, "verification.html", _checkout_context(
-        booking, "verification", form=form, docs=docs,
-        doc_rows=[
-            {"field": "driving_license", "type": Document.DocType.DRIVING_LICENSE, "label": "Driving License",
-             "hint": "A clear photo or scan of the front of your license.", "doc": docs.get(Document.DocType.DRIVING_LICENSE),
-             "errors": form["driving_license"].errors},
-            {"field": "govt_id", "type": Document.DocType.GOVT_ID, "label": "Government ID",
-             "hint": "Aadhaar, PAN or passport — your name and photo must be readable.", "doc": docs.get(Document.DocType.GOVT_ID),
-             "errors": form["govt_id"].errors},
-        ],
-    ))
+        initial = {"driver_choice": booking.driver_choice or "SELF"}
+        if booking.driver_licence_number:
+            initial.update(driver_name=booking.driver_name, licence_number=format_licence(booking.driver_licence_number),
+                           date_of_birth=booking.driver_date_of_birth, expiry_date=booking.driver_licence_expiry)
+        elif customer.licence_number:
+            initial.update(driver_name=customer.licence_name or customer.full_name,
+                           licence_number=format_licence(customer.licence_number),
+                           date_of_birth=customer.date_of_birth, expiry_date=customer.licence_expiry)
+        form = DriverDetailsForm(initial=initial, trip_start=trip_start, trip_end=trip_end)
+    return render(request, "driver.html", _checkout_context(booking, "driver", form=form, min_age=MIN_AGE))
 
 
 @customer_required
@@ -752,7 +735,7 @@ def payment_verify(request):
         booking.payment_status = Booking.PaymentStatus.PAID
         booking.razorpay_payment_id = payment_id
         booking.payment_method = paid_method[:30]
-        booking.status = Booking.Status.CONFIRMED if booking.documents_verified() else Booking.Status.PENDING_VERIFICATION
+        booking.status = Booking.Status.CONFIRMED
         booking.save(update_fields=["payment_status", "razorpay_payment_id", "payment_method", "status"])
     send_booking_confirmation_email(booking)
     return _confirmation_json(booking)
@@ -769,11 +752,7 @@ def confirmation(request, booking_id):
     if not booking.is_paid and booking.status != Booking.Status.COMPLETED:
         messages.info(request, "Complete the payment to confirm this booking.")
         return redirect("payment", booking_id=booking.booking_id)
-    return render(request, "confirmation.html", {
-        "booking": booking, "car": booking.car,
-        "docs": list(booking.documents.all()),
-        "rejected_docs": booking.rejected_documents(),
-    })
+    return render(request, "confirmation.html", {"booking": booking, "car": booking.car})
 
 
 @customer_required
@@ -812,7 +791,7 @@ def cancel_booking(request, booking_id):
 def my_bookings(request):
     customer = get_customer(request)
     tab = request.GET.get("tab", "upcoming")
-    base = Booking.objects.filter(user=customer).select_related("car", "pickup_location").prefetch_related("documents")
+    base = Booking.objects.filter(user=customer).select_related("car", "pickup_location")
     groups = {
         "upcoming": base.filter(status__in=Booking.OPEN_STATUSES)
         .exclude(status=Booking.Status.PENDING, created_at__lt=_pending_cutoff()).order_by("pickup_datetime"),
@@ -900,21 +879,17 @@ def logout_view(request):
 # Admin console
 # ---------------------------------------------------------------------------
 
-def _review_queue():
-    """Paid bookings whose documents still need a decision."""
+def _driver_watchlist():
+    """Upcoming trips somebody other than the customer will drive — worth a human look."""
     return Booking.objects.filter(
-        Q(status=Booking.Status.PENDING_VERIFICATION)
-        | Q(status__in=[Booking.Status.CONFIRMED, Booking.Status.ACTIVE],
-            documents__verification_status=Document.VerificationStatus.PENDING)
-    ).distinct()
-
-
-def _admin_verification_count():
-    return _review_queue().count()
+        status__in=[Booking.Status.PENDING_VERIFICATION, Booking.Status.CONFIRMED, Booking.Status.ACTIVE],
+        driver_choice="OTHER",
+        dropoff_datetime__gte=timezone.now(),
+    )
 
 
 def _admin_ctx(active, **extra):
-    return {"active": active, "verification_count": _admin_verification_count(), **extra}
+    return {"active": active, "verification_count": _driver_watchlist().count(), **extra}
 
 
 def _admin_back(request, fallback="admin_dashboard"):
@@ -987,22 +962,23 @@ def admin_dashboard(request):
 
 
 @clerk_admin_required
-def admin_verifications(request):
+def admin_drivers(request):
+    """Every upcoming trip with the licence it was booked on."""
     related = ("user", "car", "pickup_location")
-    queue = _review_queue().select_related(*related).prefetch_related("documents").order_by("created_at")
-    awaiting_payment = (
-        Booking.objects.filter(status=Booking.Status.PENDING, created_at__gte=_pending_cutoff(), documents__isnull=False)
-        .exclude(payment_status=Booking.PaymentStatus.PAID).distinct()
-        .select_related(*related).prefetch_related("documents").order_by("-created_at")[:20]
-    )
-    return render(request, "admin_verifications.html", _admin_ctx(
-        "verifications", verification_queue=queue, awaiting_payment=awaiting_payment,
+    upcoming = Booking.objects.filter(
+        status__in=[Booking.Status.PENDING_VERIFICATION, Booking.Status.CONFIRMED, Booking.Status.ACTIVE],
+        dropoff_datetime__gte=timezone.now(),
+    ).select_related(*related).order_by("pickup_datetime")
+    if request.GET.get("who") == "other":
+        upcoming = upcoming.filter(driver_choice="OTHER")
+    return render(request, "admin_drivers.html", _admin_ctx(
+        "drivers", trips=upcoming[:60], who=request.GET.get("who", ""), watchlist_count=_driver_watchlist().count(),
     ))
 
 
 BOOKING_FILTERS = {
     "active": ("Active", lambda qs: qs.filter(pk__in=_open_bookings().values("pk"))),
-    "verification": ("Needs review", lambda qs: qs.filter(pk__in=_review_queue().values("pk"))),
+    "other_driver": ("Someone else driving", lambda qs: qs.filter(pk__in=_driver_watchlist().values("pk"))),
     "confirmed": ("Confirmed", lambda qs: qs.filter(status=Booking.Status.CONFIRMED)),
     "on_trip": ("On trip", lambda qs: qs.filter(status=Booking.Status.ACTIVE)),
     "completed": ("Completed", lambda qs: qs.filter(status=Booking.Status.COMPLETED)),
@@ -1034,58 +1010,15 @@ def admin_bookings(request):
 @clerk_admin_required
 def admin_booking_detail(request, booking_id):
     booking = get_object_or_404(Booking.objects.select_related("user", "car", "car__location", "pickup_location"), booking_id=booking_id)
-    docs = booking.document_map()
-    doc_rows = [{"type": value, "label": label, "doc": docs.get(value)} for value, label in Document.DocType.choices]
     clashes = Booking.overlaps(booking.car, booking.pickup_datetime, booking.dropoff_datetime, exclude_id=booking.pk) \
         if booking.status in Booking.OPEN_STATUSES else Booking.objects.none()
     return render(request, "admin_booking_detail.html", _admin_ctx(
-        "bookings", booking=booking, doc_rows=doc_rows,
+        "bookings", booking=booking,
         clashes=clashes.select_related("user"),
         blocks=booking.car.blocked_window(booking.pickup_datetime, booking.dropoff_datetime)
         if booking.status in Booking.OPEN_STATUSES else [],
         other_bookings=Booking.objects.filter(user=booking.user).exclude(pk=booking.pk).select_related("car").order_by("-created_at")[:5],
     ))
-
-
-# Only these types are ever rendered inline; anything else downloads, so a
-# renamed upload can never execute as HTML inside the admin console.
-INLINE_DOCUMENT_TYPES = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
-
-
-def _document_bytes(doc):
-    data = fetch_document_bytes(doc.file_reference) if doc.file_reference else b""
-    if not data and doc.file:
-        # Remote copy missing or empty (older uploads sent 0 bytes) — use the local copy.
-        try:
-            with doc.file.open("rb") as fh:
-                data = fh.read()
-        except (OSError, ValueError):
-            data = b""
-    return data
-
-
-@xframe_options_sameorigin
-@clerk_admin_required
-def admin_document(request, doc_id):
-    """Stream a KYC document to the admin, framable only by our own pages."""
-    doc = get_object_or_404(Document, pk=doc_id)
-    data = _document_bytes(doc)
-    if not data:
-        return HttpResponse(
-            "<!doctype html><meta charset='utf-8'><body style='font:15px system-ui;color:#475467;display:grid;"
-            "place-items:center;height:100vh;margin:0;text-align:center;padding:24px'>"
-            "<div><b style='color:#101828'>This file is missing or empty.</b><br>"
-            "Reject the document with a note asking the customer to upload it again.</div>",
-            status=404,
-        )
-    name = get_valid_filename(doc.storage_name.rsplit("/", 1)[-1]) or f"document-{doc.pk}"
-    ext = ("." + name.rsplit(".", 1)[-1].lower()) if "." in name else ""
-    content_type = INLINE_DOCUMENT_TYPES.get(ext)
-    response = HttpResponse(data, content_type=content_type or "application/octet-stream")
-    response["Content-Disposition"] = f'{"inline" if content_type else "attachment"}; filename="{name}"'
-    response["Cache-Control"] = "private, no-store"
-    response["X-Content-Type-Options"] = "nosniff"
-    return response
 
 
 @clerk_admin_required
@@ -1220,75 +1153,6 @@ def admin_cancel_booking(request, booking_id):
         messages.error(request, f"Booking {booking_id} cancelled, but the refund failed — process it manually in Razorpay.")
     else:
         messages.success(request, f"Booking {booking_id} cancelled.")
-    return _admin_back(request)
-
-
-def _selected_documents(request, booking):
-    docs = booking.documents.all()
-    doc_type = request.POST.get("doc_type")
-    return docs.filter(document_type=doc_type) if doc_type else docs
-
-
-@clerk_admin_required
-@require_POST
-def admin_approve_docs(request, booking_id):
-    booking = _admin_booking(booking_id)
-    if booking is None:
-        messages.error(request, "Booking not found.")
-        return _admin_back(request)
-    if booking.is_closed:
-        messages.error(request, "This booking is closed and can't be approved.")
-        return _admin_back(request)
-    targets = _selected_documents(request, booking)
-    if not request.POST.get("doc_type") and booking.missing_documents():
-        messages.error(request, f"Can't approve yet — missing: {', '.join(booking.missing_documents())}.")
-        return _admin_back(request)
-    if not targets.exists():
-        messages.error(request, "No documents to approve.")
-        return _admin_back(request)
-    targets.exclude(verification_status=Document.VerificationStatus.VERIFIED).update(
-        verification_status=Document.VerificationStatus.VERIFIED, verified_at=timezone.now(), rejection_reason="",
-    )
-    confirmed = False
-    if booking.documents_verified() and booking.is_paid and booking.status == Booking.Status.PENDING_VERIFICATION:
-        booking.status = Booking.Status.CONFIRMED
-        booking.save(update_fields=["status"])
-        send_booking_confirmation_email(booking)
-        confirmed = True
-    if confirmed:
-        messages.success(request, f"Documents verified. {booking_id} is confirmed and the customer has been emailed.")
-    elif booking.documents_verified() and not booking.is_paid:
-        messages.success(request, "Documents verified. The booking confirms automatically once payment is received.")
-    else:
-        messages.success(request, "Document approved.")
-    return _admin_back(request)
-
-
-@clerk_admin_required
-@require_POST
-def admin_reject_docs(request, booking_id):
-    booking = _admin_booking(booking_id)
-    if booking is None:
-        messages.error(request, "Booking not found.")
-        return _admin_back(request)
-    if booking.is_closed:
-        messages.error(request, "This booking is closed and can't be rejected.")
-        return _admin_back(request)
-    reason = (request.POST.get("reason") or "").strip()[:300]
-    if not reason:
-        messages.error(request, "Please provide a reason so the customer knows what to fix.")
-        return _admin_back(request)
-    targets = _selected_documents(request, booking)
-    if not request.POST.get("doc_type"):
-        targets = targets.exclude(verification_status=Document.VerificationStatus.VERIFIED)
-    updated = targets.update(verification_status=Document.VerificationStatus.REJECTED, rejection_reason=reason, verified_at=None)
-    if not updated:
-        messages.error(request, "No documents to reject.")
-    else:
-        if booking.status == Booking.Status.CONFIRMED:
-            booking.status = Booking.Status.PENDING_VERIFICATION
-            booking.save(update_fields=["status"])
-        messages.success(request, "Documents rejected. The customer will be asked to re-upload.")
     return _admin_back(request)
 
 

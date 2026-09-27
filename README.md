@@ -1,20 +1,21 @@
 # DriveGo – Car Rental Website
 
-DriveGo is a car rental website for Kolkata. Customers can search for a car, check if it is free on their dates, upload their documents, and book and pay online. An admin panel lets staff manage bookings, cars and customers.
+DriveGo is a car rental website for Kolkata. Customers can search for a car, check if it is free on their dates, enter the driving licence details, and book and pay online. An admin panel lets staff manage bookings, cars and customers.
 
 ## Main features
 
 **Customers**
 - Search cars by location, dates, type and price
 - See live availability on a calendar
-- Book in 5 steps: Dates → Documents → Delivery → Review → Payment
+- Book in 5 steps: Dates → Driver → Delivery → Review → Payment
+- Driving licence checked automatically (number format, issuing state, expiry date, age)
 - Pick up from a store or get home delivery
 - Pay online and cancel before pickup for a full refund
 - View all bookings on the My Bookings page
 
 **Admin**
 - Dashboard with revenue and today's pickups and returns
-- Approve or reject customer documents
+- See the licence every upcoming trip was booked on
 - Manage bookings, cars, locations and blocked dates
 - Give or remove admin access
 
@@ -27,16 +28,15 @@ DriveGo is a car rental website for Kolkata. Customers can search for a car, che
 | Database | PostgreSQL (Supabase) |
 | Login | Clerk |
 | Payments | Razorpay |
-| File storage | Supabase Storage |
 | Hosting | Vercel |
 
 ## How a booking works
 
 1. The customer chooses a car and dates. The car is held for 60 minutes.
-2. They upload a driving license and a government ID.
+2. They say who is driving and enter that person's licence number, date of birth and expiry date. It is checked on the spot: the RTO number format, a real state code, an expiry date that covers the trip, and a driver aged 18 or over. A licence checked once is saved to the profile, so the next booking skips this step.
 3. They choose store pickup or home delivery.
 4. They pay: price per day × number of days, plus delivery and 18% tax.
-5. An admin checks the documents and confirms the booking.
+5. The booking is confirmed straight away. Staff match the original licence against the booking at handover.
 
 ## Project folders
 

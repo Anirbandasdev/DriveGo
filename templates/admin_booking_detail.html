@@ -52,9 +52,19 @@
     </section>
 
     <section class="adm-card">
-      <div class="adm-card-head"><h2>Documents</h2>{% if booking.documents_verified %}<span class="pill tone-ok">All verified</span>{% endif %}</div>
-      {% with b=booking %}{% include "partials/admin_doc_review.html" %}{% endwith %}
-      {% for row in doc_rows %}{% if not row.doc %}<p class="muted-note">Missing: {{ row.label }}</p>{% endif %}{% endfor %}
+      <div class="adm-card-head"><h2>Driver</h2>{% if booking.driver_checked %}<span class="pill tone-{% if booking.driver_is_self %}ok{% else %}warn{% endif %}">{{ booking.get_driver_choice_display }}</span>{% endif %}</div>
+      {% if booking.driver_checked %}
+      <dl class="facts">
+        <div><dt>Name on licence</dt><dd>{{ booking.driver_name }}</dd></div>
+        <div><dt>Licence number</dt><dd>{{ booking.driver_licence_number|licence }}</dd></div>
+        <div><dt>Date of birth</dt><dd>{{ booking.driver_date_of_birth|date:"d M Y" }}</dd></div>
+        <div><dt>Valid until</dt><dd>{{ booking.driver_licence_expiry|date:"d M Y" }}{% if booking.driver_licence_expiry < booking.dropoff_datetime.date %} <span class="pill tone-no">Expires before the trip ends</span>{% endif %}</dd></div>
+        <div><dt>Checked</dt><dd>{{ booking.driver_checked_at|date:"d M Y, h:i A" }} · automatic</dd></div>
+      </dl>
+      <p class="muted-note">Match the original licence against these details at handover.</p>
+      {% else %}
+      <p class="muted-note">No driver details on this booking yet.</p>
+      {% endif %}
     </section>
 
     <section class="adm-card">
@@ -98,5 +108,4 @@
     </section>
   </div>
 </div>
-{% include "partials/doc_modal.html" %}
 {% endblock %}
