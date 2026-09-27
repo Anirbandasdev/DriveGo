@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load static rental_tags %}
+{% block page %}profile{% endblock %}
+{% block title %}DriveGo - My Profile{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/flow.css' %}" />{% endblock %}
+{% block content %}
+<div class="mb">
+  <header class="mb-head">
+    <div class="mb-user">
+      <span class="mb-avatar">{% if customer.profile_image_url %}<img src="{{ customer.profile_image_url }}" alt="" />{% else %}{{ customer.full_name|default:customer.email|default:"D"|slice:":1"|upper }}{% endif %}</span>
+      <div><h1>My profile</h1><p>{{ customer.email }}</p></div>
+    </div>
+    <div class="mb-head-actions">
+      <a class="btn btn-ghost" href="{% url 'my_bookings' %}">My bookings</a>
+    </div>
+  </header>
+
+  <form class="co-card dr" action="{% url 'profile' %}" method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="co-alert is-error">{% for e in form.non_field_errors %}{{ e }} {% endfor %}</div>{% endif %}
+
+    <h2 class="co-card-title">Your details</h2>
+    <div class="dr-fields">
+      <div class="field">
+        <label for="{{ form.full_name.id_for_label }}">Full name</label>
+        <input type="text" name="full_name" id="{{ form.full_name.id_for_label }}" value="{{ form.full_name.value|default:'' }}" maxlength="120" autocomplete="name" required />
+        {% for e in form.full_name.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ form.phone.id_for_label }}">Mobile number</label>
+        <input type="tel" name="phone" id="{{ form.phone.id_for_label }}" value="{{ form.phone.value|default:'' }}" maxlength="20" placeholder="98765 43210" autocomplete="tel" required />
+        <p class="field-hint">Used only to reach you about a booking.</p>
+        {% for e in form.phone.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" value="{{ customer.email }}" disabled />
+        <p class="field-hint">Comes from your sign-in account and cannot be changed here.</p>
+      </div>
+    </div>
+
+    <h2 class="co-card-title is-next">Driving licence</h2>
+    <p class="field-hint">Saved here so checkout can skip the driver step. Clear all three boxes to remove it.</p>
+    <div class="dr-fields">
+      <div class="field">
+        <label for="{{ form.licence_number.id_for_label }}">Driving licence number</label>
+        <input type="text" name="licence_number" id="{{ form.licence_number.id_for_label }}" value="{{ form.licence_number.value|default:'' }}" maxlength="20" placeholder="WB01 20150012345" spellcheck="false" />
+        {% for e in form.licence_number.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="{{ form.date_of_birth.id_for_label }}">Date of birth</label>
+          <input type="date" name="date_of_birth" id="{{ form.date_of_birth.id_for_label }}" value="{{ form.date_of_birth.value|date:'Y-m-d'|default:'' }}" />
+          <p class="field-hint">You must be {{ min_age }} or older to drive with us.</p>
+          {% for e in form.date_of_birth.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+        </div>
+        <div class="field">
+          <label for="{{ form.licence_expiry.id_for_label }}">Licence valid until</label>
+          <input type="date" name="licence_expiry" id="{{ form.licence_expiry.id_for_label }}" value="{{ form.licence_expiry.value|date:'Y-m-d'|default:'' }}" />
+          {% for e in form.licence_expiry.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="co-actions">
+      <span></span>
+      <button class="btn btn-primary" type="submit">Save profile</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

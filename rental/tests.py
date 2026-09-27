@@ -969,10 +969,10 @@ def _add_driver(booking, choice="SELF", name="Flow User", number="WB012015001234
     return booking
 
 
-def _driver_post(name="Flow User", number=LICENCE, born="1995-04-12", expiry=None, choice="SELF"):
+def _driver_post(name="Flow User", number=LICENCE, born="1995-04-12", expiry=None, choice="SELF", phone="9876543210"):
     return {
         "driver_choice": choice, "driver_name": name, "licence_number": number, "date_of_birth": born,
-        "expiry_date": expiry or (timezone.localdate() + timedelta(days=900)).isoformat(),
+        "expiry_date": expiry or (timezone.localdate() + timedelta(days=900)).isoformat(), "phone": phone,
     }
 
 
@@ -1784,3 +1784,111 @@ class AdminLicenceCheckTests(FlowFixtureMixin, TestCase):
         response = _login("user_flow").post(f"/dashboard/bookings/{self.booking.booking_id}/licence/")
         self.assertEqual(response.status_code, 302)
         self.assertNotIn("/dashboard/", response["Location"])
+
+
+class DriverPhoneTests(FlowFixtureMixin, TestCase):
+    """We ask for a mobile number only when the account has none."""
+
+    def hold(self, bid="DG-PHN-0001"):
+        return self.make(bid, status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING)
+
+    def test_the_field_is_asked_for_when_the_account_has_no_number(self):
+        body = _login("user_flow").get(f"/driver/{self.hold().booking_id}/").content.decode()
+        self.assertIn('name="phone"', body)
+        self.assertIn("Your account has no number yet", body)
+
+    def test_a_number_is_saved_to_the_profile(self):
+        hold = self.hold("DG-PHN-0002")
+        response = _login("user_flow").post(f"/driver/{hold.booking_id}/", _driver_post(phone="+91 98765 43210"))
+        self.assertRedirects(response, f"/delivery/{hold.booking_id}/", fetch_redirect_response=False)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.phone, "9876543210")
+
+    def test_the_step_cannot_be_finished_without_one(self):
+        hold = self.hold("DG-PHN-0003")
+        response = _login("user_flow").post(f"/driver/{hold.booking_id}/", _driver_post(phone=""))
+        self.assertEqual(response.status_code, 200)
+        hold.refresh_from_db()
+        self.assertFalse(hold.driver_checked)
+
+    def test_a_junk_number_is_refused(self):
+        hold = self.hold("DG-PHN-0004")
+        response = _login("user_flow").post(f"/driver/{hold.booking_id}/", _driver_post(phone="12345"))
+        self.assertContains(response, "10-digit Indian mobile number")
+
+    def test_an_account_that_has_a_number_is_not_asked_again(self):
+        Customer.objects.filter(pk=self.user.pk).update(phone="9800011122")
+        hold = self.hold("DG-PHN-0005")
+        client = _login("user_flow")
+        self.assertNotIn('name="phone"', client.get(f"/driver/{hold.booking_id}/").content.decode())
+        response = client.post(f"/driver/{hold.booking_id}/", _driver_post())
+        self.assertRedirects(response, f"/delivery/{hold.booking_id}/", fetch_redirect_response=False)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.phone, "9800011122")
+
+
+class ProfilePageTests(FlowFixtureMixin, TestCase):
+    """The profile page keeps the name, mobile number and saved licence."""
+
+    def form(self, **over):
+        data = {"full_name": "Flow User", "phone": "9876543210", "licence_number": LICENCE,
+                "date_of_birth": "1995-04-12",
+                "licence_expiry": (timezone.localdate() + timedelta(days=900)).isoformat()}
+        data.update(over)
+        return data
+
+    def test_page_shows_the_saved_details(self):
+        Customer.objects.filter(pk=self.user.pk).update(phone="9800011122", licence_number="WB0120150012345")
+        body = _login("user_flow").get("/profile/").content.decode()
+        self.assertIn("9800011122", body)
+        self.assertIn("WB01 20150012345", body)
+        self.assertIn(self.user.email, body)
+
+    def test_saving_updates_name_phone_and_licence(self):
+        response = _login("user_flow").post("/profile/", self.form(full_name="Anirban Das"))
+        self.assertRedirects(response, "/profile/", fetch_redirect_response=False)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.full_name, "Anirban Das")
+        self.assertEqual(self.user.phone, "9876543210")
+        self.assertEqual(self.user.licence_number, "WB0120150012345")
+        self.assertIsNotNone(self.user.licence_checked_at)
+
+    def test_a_bad_phone_is_refused(self):
+        response = _login("user_flow").post("/profile/", self.form(phone="12345"))
+        self.assertContains(response, "10-digit Indian mobile number")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.phone, "")
+
+    def test_a_number_only_name_is_refused(self):
+        response = _login("user_flow").post("/profile/", self.form(full_name="12"))
+        self.assertContains(response, "Enter a real full name")
+
+    def test_a_bad_licence_is_refused(self):
+        response = _login("user_flow").post("/profile/", self.form(licence_number="XX999"))
+        self.assertContains(response, "as it is printed")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.licence_number, "")
+
+    def test_half_filled_licence_is_refused(self):
+        response = _login("user_flow").post("/profile/", self.form(licence_expiry=""))
+        self.assertContains(response, "clear all three")
+
+    def test_clearing_all_three_removes_the_saved_licence(self):
+        client = _login("user_flow")
+        client.post("/profile/", self.form())
+        client.post("/profile/", self.form(licence_number="", date_of_birth="", licence_expiry=""))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.licence_number, "")
+        self.assertIsNone(self.user.licence_expiry)
+
+    def test_a_saved_profile_licence_skips_the_driver_step(self):
+        client = _login("user_flow")
+        client.post("/profile/", self.form())
+        free = timezone.localdate() + timedelta(days=15)
+        response = client.post(f"/booking/{self.car.pk}/", self.dates(free, 2))
+        self.assertIn("/summary/", response["Location"])
+
+    def test_signed_out_visitors_are_sent_to_login(self):
+        response = Client().get("/profile/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response["Location"])

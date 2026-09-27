@@ -12,6 +12,7 @@ DriveGo is a car rental website for Kolkata. Customers can search for a car, che
 - Pick up from a store or get home delivery
 - Pay online and cancel before pickup for a full refund
 - View all bookings on the My Bookings page
+- Edit name, mobile number and the saved licence on the profile page
 
 **Admin**
 - Dashboard with revenue and today's pickups and returns

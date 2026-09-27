@@ -16,7 +16,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
-from .forms import MAX_RENTAL_DAYS, BookingDatesForm, DeliveryForm, DriverDetailsForm
+from .forms import MAX_RENTAL_DAYS, BookingDatesForm, DeliveryForm, DriverDetailsForm, ProfileForm
 from .models import Booking, Car, CarBlock, Customer, Location, SiteSetting, overlapping
 from .utils import (
     call_licence_api,
@@ -582,8 +582,9 @@ def driver(request, booking_id):
     customer = get_customer(request)
     trip_start = timezone.localdate(booking.pickup_datetime)
     trip_end = timezone.localdate(booking.dropoff_datetime)
+    needs_phone = not customer.phone
     if request.method == "POST":
-        form = DriverDetailsForm(request.POST, trip_start=trip_start, trip_end=trip_end)
+        form = DriverDetailsForm(request.POST, trip_start=trip_start, trip_end=trip_end, require_phone=needs_phone)
         if form.is_valid():
             data = form.cleaned_data
             booking.set_driver(data["driver_choice"], data["driver_name"], data["licence_number"],
@@ -602,6 +603,9 @@ def driver(request, booking_id):
                 customer.save(update_fields=[
                     "licence_number", "licence_name", "date_of_birth", "licence_expiry", "licence_checked_at",
                 ])
+            if needs_phone and data.get("phone"):
+                customer.phone = data["phone"]
+                customer.save(update_fields=["phone"])
             messages.success(request, form.result.message)
             return redirect("delivery", booking_id=booking.booking_id)
     else:
@@ -613,8 +617,9 @@ def driver(request, booking_id):
             initial.update(driver_name=customer.licence_name or customer.full_name,
                            licence_number=format_licence(customer.licence_number),
                            date_of_birth=customer.date_of_birth, expiry_date=customer.licence_expiry)
-        form = DriverDetailsForm(initial=initial, trip_start=trip_start, trip_end=trip_end)
-    return render(request, "driver.html", _checkout_context(booking, "driver", form=form, min_age=MIN_AGE))
+        form = DriverDetailsForm(initial=initial, trip_start=trip_start, trip_end=trip_end, require_phone=needs_phone)
+    return render(request, "driver.html", _checkout_context(
+        booking, "driver", form=form, min_age=MIN_AGE, needs_phone=needs_phone))
 
 
 @customer_required
@@ -817,7 +822,38 @@ def my_bookings(request):
 
 @customer_required
 def profile(request):
-    return redirect("my_bookings")
+    """Name, mobile number and the licence we reuse on the next booking."""
+    customer = get_customer(request)
+    if request.method == "POST":
+        form = ProfileForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            customer.full_name = data["full_name"]
+            customer.phone = data["phone"]
+            if form.licence_given:
+                customer.licence_number = data["licence_number"]
+                customer.licence_name = data["full_name"]
+                customer.date_of_birth = data["date_of_birth"]
+                customer.licence_expiry = data["licence_expiry"]
+                customer.licence_checked_at = timezone.now()
+            else:
+                customer.licence_number = customer.licence_name = ""
+                customer.date_of_birth = customer.licence_expiry = customer.licence_checked_at = None
+            customer.save(update_fields=[
+                "full_name", "phone", "licence_number", "licence_name",
+                "date_of_birth", "licence_expiry", "licence_checked_at",
+            ])
+            messages.success(request, "Profile saved." + (f" {form.result.message}." if form.licence_given else ""))
+            return redirect("profile")
+    else:
+        form = ProfileForm(initial={
+            "full_name": customer.full_name,
+            "phone": customer.phone,
+            "licence_number": format_licence(customer.licence_number),
+            "date_of_birth": customer.date_of_birth,
+            "licence_expiry": customer.licence_expiry,
+        })
+    return render(request, "profile.html", {"customer": customer, "form": form, "min_age": MIN_AGE})
 
 
 # ---------------------------------------------------------------------------

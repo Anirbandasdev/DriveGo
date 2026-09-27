@@ -66,6 +66,9 @@
 }
 .co-card + .co-card { margin-top: 16px }
 .co-card-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 16px }
+/* A second section inside the same card needs air above it. */
+.co-card-title.is-next { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--flow-line) }
+.co-card-title + .field-hint { margin: -10px 0 14px }
 
 .co-actions {
   display: flex;

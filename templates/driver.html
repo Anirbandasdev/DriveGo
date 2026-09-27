@@ -36,6 +36,15 @@
       {% for e in form.licence_number.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
     </div>
 
+    {% if needs_phone %}
+    <div class="field">
+      <label for="{{ form.phone.id_for_label }}">Mobile number</label>
+      <input type="tel" name="phone" id="{{ form.phone.id_for_label }}" value="{{ form.phone.value|default:'' }}" maxlength="20" placeholder="98765 43210" autocomplete="tel" required />
+      <p class="field-hint">We only use it to reach you about this trip. Your account has no number yet.</p>
+      {% for e in form.phone.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
     <div class="field-row">
       <div class="field">
         <label for="{{ form.date_of_birth.id_for_label }}">Date of birth</label>
