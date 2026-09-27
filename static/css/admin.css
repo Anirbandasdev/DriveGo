@@ -203,14 +203,16 @@ a.kpi:hover { border-color: var(--accent) }
 .setting-row p { font-size: .8rem; color: var(--muted); margin-top: 8px }
 .setting-row .pill { white-space: normal }
 
-.lcheck { list-style: none; display: grid; gap: 8px; margin: 14px 0 }
-.lcheck li { display: flex; gap: 10px; align-items: flex-start; font-size: .84rem }
-.lcheck .ic { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px }
+/* Licence checks: one short line each, the reason on hover unless it failed. */
+.lcheck { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 12px 0 10px; padding-top: 10px; border-top: 1px solid #F2F4F7 }
+.lcheck li { display: flex; gap: 6px; align-items: baseline; font-size: .82rem }
+.lcheck .ic { width: 15px; height: 15px; flex-shrink: 0; align-self: center }
 .lcheck li.is-ok .ic { color: var(--ok) }
+.lcheck li.is-no { flex-basis: 100%; color: var(--no) }
 .lcheck li.is-no .ic { color: var(--no) }
-.lcheck b { display: block; font-weight: 700 }
-.lcheck small { display: block; color: var(--muted) }
-.lcheck-run { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px }
+.lcheck b { font-weight: 600 }
+.lcheck small { color: var(--muted) }
+.drv-head { display: flex; gap: 8px; align-items: center }
 
 /* ---- Booking detail ----------------------------------------------------- */
 
@@ -227,6 +229,9 @@ a.kpi:hover { border-color: var(--accent) }
 .facts dd small { display: block; font-weight: 500; color: var(--muted) }
 .facts.is-money dd { text-align: right }
 .facts.is-money .total dt, .facts.is-money .total dd { color: var(--ink); font-weight: 800; font-size: 1rem }
+/* Two label/value pairs per row, for cards with many short facts. */
+.facts.is-pairs { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px }
+.facts.is-pairs div { border-top: none; padding: 4px 0; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; font-size: .84rem }
 .facts.is-compact { margin-top: 10px; padding-top: 6px; border-top: 1px dashed #E4E7EC }
 .facts.is-compact div { grid-template-columns: 80px minmax(0, 1fr); padding: 6px 0; font-size: .82rem }
 
