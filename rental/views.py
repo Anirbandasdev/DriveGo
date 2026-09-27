@@ -19,6 +19,7 @@ from django.views.decorators.http import require_GET, require_POST
 from .forms import MAX_RENTAL_DAYS, BookingDatesForm, DeliveryForm, DriverDetailsForm
 from .models import Booking, Car, CarBlock, Customer, Location, SiteSetting, overlapping
 from .utils import (
+    call_licence_api,
     create_razorpay_order,
     fetch_razorpay_payment,
     get_user_role,
@@ -29,7 +30,7 @@ from .utils import (
     verify_clerk_user,
     verify_razorpay_signature,
 )
-from .verification import MIN_AGE, format_licence
+from .verification import MIN_AGE, check_licence, check_report, format_licence, provider_configured
 
 DEFAULT_PICKUP_TIME = "10:00"
 DEFAULT_DROP_TIME = "18:00"
@@ -1014,6 +1015,8 @@ def admin_booking_detail(request, booking_id):
         if booking.status in Booking.OPEN_STATUSES else Booking.objects.none()
     return render(request, "admin_booking_detail.html", _admin_ctx(
         "bookings", booking=booking,
+        licence_rows=_licence_report(booking),
+        licence_api_on=provider_configured(),
         clashes=clashes.select_related("user"),
         blocks=booking.car.blocked_window(booking.pickup_datetime, booking.dropoff_datetime)
         if booking.status in Booking.OPEN_STATUSES else [],
@@ -1342,6 +1345,46 @@ def admin_delete_block(request, block_id):
     block.delete()
     messages.success(request, f"Block removed — {label} is bookable for that period again.")
     return _admin_back(request, "admin_blocks")
+
+
+def _licence_report(booking):
+    """Re-run the licence rules now, so the admin sees today's answer, not the booking-day one."""
+    if not booking.driver_checked:
+        return []
+    return check_report(
+        booking.driver_licence_number, booking.driver_date_of_birth, booking.driver_licence_expiry,
+        trip_start=timezone.localdate(booking.pickup_datetime), trip_end=timezone.localdate(booking.dropoff_datetime),
+    )
+
+
+@clerk_admin_required
+@require_POST
+def admin_check_licence(request, booking_id):
+    """Run the licence check again from the admin console, and ask the API service if one is set up."""
+    booking = _admin_booking(booking_id)
+    if booking is None:
+        messages.error(request, "Booking not found.")
+        return _admin_back(request)
+    if not booking.driver_checked:
+        messages.error(request, "This booking has no driver details to check.")
+        return _admin_back(request)
+    result = check_licence(
+        booking.driver_licence_number, booking.driver_date_of_birth, booking.driver_licence_expiry,
+        trip_start=timezone.localdate(booking.pickup_datetime), trip_end=timezone.localdate(booking.dropoff_datetime),
+    )
+    if not result.ok:
+        messages.error(request, f"Licence check failed: {result.message}")
+        return _admin_back(request)
+    remote = call_licence_api(booking.driver_licence_number, booking.driver_date_of_birth, booking.driver_name)
+    if remote is None:
+        messages.success(request, f"{result.message}. No outside verification service is connected, so this is our own check.")
+    elif remote["ok"]:
+        name = remote.get("name") or booking.driver_name
+        messages.success(request, f"{result.message}. The verification service confirmed the licence, held by {name}.")
+    else:
+        messages.error(request, "The verification service could not confirm this licence: "
+                                + (remote.get("message") or "no reason given."))
+    return _admin_back(request)
 
 
 @clerk_admin_required

@@ -61,6 +61,18 @@
         <div><dt>Valid until</dt><dd>{{ booking.driver_licence_expiry|date:"d M Y" }}{% if booking.driver_licence_expiry < booking.dropoff_datetime.date %} <span class="pill tone-no">Expires before the trip ends</span>{% endif %}</dd></div>
         <div><dt>Checked</dt><dd>{{ booking.driver_checked_at|date:"d M Y, h:i A" }} · automatic</dd></div>
       </dl>
+      <ul class="lcheck">
+        {% for row in licence_rows %}
+        <li class="{% if row.ok %}is-ok{% else %}is-no{% endif %}">
+          <svg class="ic" viewBox="0 0 24 24">{% if row.ok %}<path d="M20 6 9 17l-5-5"/>{% else %}<path d="M18 6 6 18M6 6l12 12"/>{% endif %}</svg>
+          <span><b>{{ row.label }}</b><small>{{ row.detail }}</small></span>
+        </li>
+        {% endfor %}
+      </ul>
+      <form class="lcheck-run" action="{% url 'admin_check_licence' booking.booking_id %}" method="post">{% csrf_token %}
+        <button class="btn btn-ghost btn-sm" type="submit">Run the check again</button>
+        <span class="muted-note">{% if licence_api_on %}A verification service is connected and will be asked too.{% else %}Runs our own checks — no paid service is connected.{% endif %}</span>
+      </form>
       <p class="muted-note">Match the original licence against these details at handover.</p>
       {% else %}
       <p class="muted-note">No driver details on this booking yet.</p>

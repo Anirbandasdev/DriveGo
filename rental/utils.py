@@ -222,3 +222,37 @@ def send_booking_confirmation_email(booking):
         return False
     send_mail(subject, "\n".join(lines), None, [recipient], fail_silently=True)
     return True
+
+
+def call_licence_api(number, dob, name=""):
+    """Ask a licence verification service about one licence.
+
+    Off unless LICENCE_API_URL and LICENCE_API_KEY are set, because every such
+    service charges per lookup. Returns ``None`` when nothing is configured or
+    the call fails, so the caller falls back to the free offline rules.
+    """
+    if not (settings.LICENCE_API_URL and settings.LICENCE_API_KEY):
+        return None
+    try:
+        resp = requests.post(
+            settings.LICENCE_API_URL,
+            json={"id_number": number, "dob": dob.isoformat() if dob else "", "name": name},
+            headers={"Authorization": f"Bearer {settings.LICENCE_API_KEY}", "Content-Type": "application/json"},
+            timeout=15,
+        )
+    except requests.RequestException:
+        logger.exception("Licence API call failed for %s", number)
+        return None
+    if resp.status_code != 200:
+        logger.warning("Licence API rejected %s: %s", number, resp.status_code)
+        return None
+    try:
+        body = resp.json()
+    except ValueError:
+        return None
+    data = body.get("data", body)
+    return {
+        "ok": bool(data.get("valid", data.get("status") in ("valid", "success", "id_found"))),
+        "name": data.get("name", ""),
+        "message": data.get("message", "") or body.get("message", ""),
+    }

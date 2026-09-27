@@ -39,6 +39,7 @@ urlpatterns = [
     path("dashboard/bookings/<str:booking_id>/cancel/", views.admin_cancel_booking, name="admin_cancel_booking"),
     path("dashboard/bookings/<str:booking_id>/trip/<str:action>/", views.admin_trip_action, name="admin_trip_action"),
     path("dashboard/bookings/<str:booking_id>/note/", views.admin_set_note, name="admin_set_note"),
+    path("dashboard/bookings/<str:booking_id>/licence/", views.admin_check_licence, name="admin_check_licence"),
     path("dashboard/cars/<int:car_id>/status/", views.admin_set_car_status, name="admin_set_car_status"),
     path("dashboard/cars/add/", views.admin_add_car, name="admin_add_car"),
     path("dashboard/cars/<int:car_id>/edit/", views.admin_edit_car, name="admin_edit_car"),

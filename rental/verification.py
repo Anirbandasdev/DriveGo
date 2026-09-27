@@ -107,3 +107,38 @@ def format_licence(number):
     if not match:
         return cleaned
     return f"{match.group('state')}{match.group('rto')} {match.group('year')}{match.group('serial')}"
+
+
+def check_report(number, dob, expiry, trip_start=None, trip_end=None, today=None):
+    """The same rules as ``check_licence``, but every line shown separately for the admin."""
+    today = today or date.today()
+    trip_start = trip_start or today
+    trip_end = trip_end or trip_start
+    cleaned = normalise(number)
+    match = LICENCE_RE.match(cleaned)
+    rows = []
+
+    def row(label, ok, detail):
+        rows.append({"label": label, "ok": ok, "detail": detail})
+
+    row("Number format", bool(match),
+        "Matches the RTO layout: state, office, year, serial." if match else "Not the 2-letter + 13-digit layout an RTO issues.")
+    state = match.group("state") if match else ""
+    row("Issuing state", state in STATE_CODES,
+        STATE_CODES.get(state, "Unknown state code" if state else "No state code to read"))
+    age = years_between(dob, trip_start) if dob else 0
+    row("Driver age", bool(dob) and MIN_AGE <= age <= 100,
+        f"{age} years old on the pickup date." if dob else "No date of birth given.")
+    issue_year = int(match.group("year")) if match else 0
+    row("Issue year", bool(match and dob) and dob.year + MIN_AGE <= issue_year <= today.year,
+        f"Issued {issue_year}, when the driver was {issue_year - dob.year}." if match and dob else "Cannot read the issue year.")
+    row("Valid for the trip", bool(expiry) and expiry >= trip_end,
+        f"Expires {expiry:%d %b %Y}; the trip ends {trip_end:%d %b %Y}." if expiry else "No expiry date given.")
+    return rows
+
+
+def provider_configured():
+    """True when a paid verification service has been wired up. Off by default — the rules above are free."""
+    from django.conf import settings
+
+    return bool(getattr(settings, "LICENCE_API_URL", "") and getattr(settings, "LICENCE_API_KEY", ""))

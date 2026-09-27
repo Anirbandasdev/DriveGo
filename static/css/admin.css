@@ -203,6 +203,15 @@ a.kpi:hover { border-color: var(--accent) }
 .setting-row p { font-size: .8rem; color: var(--muted); margin-top: 8px }
 .setting-row .pill { white-space: normal }
 
+.lcheck { list-style: none; display: grid; gap: 8px; margin: 14px 0 }
+.lcheck li { display: flex; gap: 10px; align-items: flex-start; font-size: .84rem }
+.lcheck .ic { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px }
+.lcheck li.is-ok .ic { color: var(--ok) }
+.lcheck li.is-no .ic { color: var(--no) }
+.lcheck b { display: block; font-weight: 700 }
+.lcheck small { display: block; color: var(--muted) }
+.lcheck-run { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px }
+
 /* ---- Booking detail ----------------------------------------------------- */
 
 .detail-car { display: flex; gap: 14px; align-items: center; margin-bottom: 14px }

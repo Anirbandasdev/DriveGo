@@ -1735,3 +1735,52 @@ class AdminDriverChecksTests(FlowFixtureMixin, TestCase):
         body = _login("user_flow_admin").get(f"/dashboard/bookings/{b.booking_id}/").content.decode()
         self.assertIn("WB01 20150012345", body)
         self.assertIn("12 Apr 1995", body)
+
+
+class AdminLicenceCheckTests(FlowFixtureMixin, TestCase):
+    """The admin can re-run the licence check; it stays free unless a service is configured."""
+
+    def setUp(self):
+        super().setUp()
+        self.booking = _add_driver(self.make("DG-LCK-0001"))
+        self.client_admin = _login("user_flow_admin")
+
+    def test_booking_page_shows_every_rule(self):
+        body = self.client_admin.get(f"/dashboard/bookings/{self.booking.booking_id}/").content.decode()
+        for label in ("Number format", "Issuing state", "Driver age", "Issue year", "Valid for the trip"):
+            self.assertIn(label, body)
+        self.assertIn("West Bengal", body)
+        self.assertIn("no paid service is connected", body)
+
+    def test_expired_licence_shows_as_a_failed_rule(self):
+        Booking.objects.filter(pk=self.booking.pk).update(driver_licence_expiry=timezone.localdate() - timedelta(days=5))
+        body = self.client_admin.get(f"/dashboard/bookings/{self.booking.booking_id}/").content.decode()
+        self.assertIn("is-no", body)
+
+    def test_rerun_reports_the_result_without_calling_out(self):
+        with patch("rental.views.call_licence_api", wraps=lambda *a, **k: None) as api:
+            response = self.client_admin.post(f"/dashboard/bookings/{self.booking.booking_id}/licence/", follow=True)
+        api.assert_called_once()
+        self.assertContains(response, "No outside verification service is connected")
+
+    def test_a_connected_service_is_reported(self):
+        with patch("rental.views.call_licence_api", return_value={"ok": True, "name": "Flow User", "message": ""}):
+            response = self.client_admin.post(f"/dashboard/bookings/{self.booking.booking_id}/licence/", follow=True)
+        self.assertContains(response, "confirmed the licence")
+
+    def test_a_service_rejection_is_reported(self):
+        with patch("rental.views.call_licence_api", return_value={"ok": False, "name": "", "message": "No record found."}):
+            response = self.client_admin.post(f"/dashboard/bookings/{self.booking.booking_id}/licence/", follow=True)
+        self.assertContains(response, "No record found.")
+
+    def test_no_api_call_is_made_when_nothing_is_configured(self):
+        from .utils import call_licence_api
+
+        with override_settings(LICENCE_API_URL="", LICENCE_API_KEY=""), patch("rental.utils.requests.post") as post:
+            self.assertIsNone(call_licence_api("WB0120150012345", timezone.localdate()))
+        post.assert_not_called()
+
+    def test_customers_cannot_run_the_check(self):
+        response = _login("user_flow").post(f"/dashboard/bookings/{self.booking.booking_id}/licence/")
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn("/dashboard/", response["Location"])

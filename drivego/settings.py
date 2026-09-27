@@ -103,6 +103,11 @@ RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 RAZORPAY_MOCK = not (RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)
 
+# Optional paid licence verification service. Left blank, the admin check runs
+# the free offline rules in rental/verification.py and costs nothing.
+LICENCE_API_URL = os.environ.get("LICENCE_API_URL", "")
+LICENCE_API_KEY = os.environ.get("LICENCE_API_KEY", "")
+
 TAX_RATE = float(os.environ.get("TAX_RATE", "0.18"))
 DELIVERY_CHARGE = int(os.environ.get("DELIVERY_CHARGE", "300"))
 BOOKING_HOLD_MINUTES = int(os.environ.get("BOOKING_HOLD_MINUTES", "60"))
