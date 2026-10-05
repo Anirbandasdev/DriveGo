@@ -1892,3 +1892,11 @@ class ProfilePageTests(FlowFixtureMixin, TestCase):
         response = Client().get("/profile/")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login/", response["Location"])
+
+
+class SecurityHeaderTests(TestCase):
+    def test_popups_keep_their_opener(self):
+        """Razorpay's bank page and Clerk's Google sign-in are popups we drive; "same-origin" leaves them blank."""
+        response = Client().get("/")
+        self.assertEqual(response["Cross-Origin-Opener-Policy"], "same-origin-allow-popups")
+        self.assertEqual(response["Referrer-Policy"], "strict-origin-when-cross-origin")

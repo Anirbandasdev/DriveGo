@@ -21,6 +21,12 @@ ALLOWED_HOSTS = list(dict.fromkeys(_base_hosts + [h.strip() for h in os.environ.
 # Behind a reverse proxy (Vercel/load balancer) the request is already https,
 # so let Django trust the X-Forwarded-Proto header for is_secure()/absolute URLs.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# Razorpay's checkout and Clerk's Google sign-in both drive a popup window they
+# opened. Django's default of "same-origin" severs that link and the popup stays
+# blank, so allow popups we open to keep talking to us.
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
+# Payment and auth providers check where the request came from.
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax"
