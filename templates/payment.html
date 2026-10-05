@@ -9,13 +9,23 @@
 {% block step %}
 <div class="co-card pay">
   {% if is_mock %}
-  <div class="co-alert is-info"><b>Simulated payment.</b> Razorpay keys aren't active, so the button below completes the booking without charging you.</div>
+  <div class="co-alert is-info"><b>Simulated payment.</b> Checkout is in demo mode, so the button below confirms the booking without charging anyone.</div>
   {% endif %}
 
   <div class="pay-amount">
-    <small>Amount due</small>
-    <b>₹{{ booking.total_amount|inr }}</b>
-    <span>Booking {{ booking.booking_id }} · {{ car.brand }} {{ car.model }}</span>
+    <div class="pay-amount-head">
+      <span>
+        <small>Amount due</small>
+        <b>₹{{ booking.total_amount|inr }}</b>
+      </span>
+      <span class="pay-chip"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{% if is_mock %}Demo{% else %}Razorpay{% endif %}</span>
+    </div>
+    <dl class="pay-split">
+      <div><dt>{{ car.brand }} {{ car.model }} · {{ booking.rental_days }} day{{ booking.rental_days|pluralize }}</dt><dd>₹{{ booking.rental_amount|inr }}</dd></div>
+      <div><dt>{% if booking.delivery_method == 'HOME_DELIVERY' %}Home delivery{% else %}Pickup at {{ booking.pickup_location.name }}{% endif %}</dt><dd>{% if booking.delivery_charge %}₹{{ booking.delivery_charge|inr }}{% else %}Free{% endif %}</dd></div>
+      <div><dt>Taxes ({{ TAX_PERCENT }}%)</dt><dd>₹{{ booking.tax_amount|inr }}</dd></div>
+    </dl>
+    <p class="pay-ref">Booking {{ booking.booking_id }}</p>
   </div>
 
   {% if is_mock %}
@@ -26,15 +36,21 @@
     <label class="pay-method"><input type="radio" name="pay_method" value="netbanking" /><span><b>Net banking</b><small>All major banks</small></span></label>
   </div>
   {% else %}
-  <p class="pay-accepted">Pick your payment method in the Razorpay window.</p>
+  <p class="pay-accepted">Choose how to pay in the Razorpay window — UPI, card, net banking or wallet.</p>
   {% endif %}
 
   <div class="co-alert is-error" id="payMsg" role="alert" hidden></div>
 
   <button class="btn btn-primary btn-block pay-btn" id="payBtn" type="button">
     <span class="spinner" hidden></span><span data-label>Pay ₹{{ booking.total_amount|inr }}</span>
+    <svg class="ic pay-btn-go" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
   </button>
-  <p class="co-privacy"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>256-bit encrypted checkout. Cancel before pickup for a full refund.</p>
+
+  <ul class="pay-assure">
+    <li><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{% if is_mock %}Nothing is charged while demo mode is on{% else %}Card details go straight to Razorpay — we never see them{% endif %}</li>
+    <li><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Confirmed the moment payment succeeds</li>
+    <li><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Free cancellation before pickup, refunded in full</li>
+  </ul>
 </div>
 {% endblock %}
 {% block scripts %}

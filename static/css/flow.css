@@ -431,10 +431,16 @@
 .review-price .total dd { font-weight: 800 }
 
 /* Payment step */
-.pay-amount { text-align: center; padding: 20px; border-radius: 16px; background: linear-gradient(135deg, #0D1117, #1D2939); color: #fff; margin-bottom: 18px }
-.pay-amount small { display: block; font-size: .78rem; opacity: .7; font-weight: 600 }
-.pay-amount b { display: block; font-size: 2.2rem; letter-spacing: -.02em; margin: 2px 0 }
-.pay-amount span { font-size: .8rem; opacity: .7 }
+.pay-amount { padding: 20px; border-radius: 18px; background: linear-gradient(150deg, #0D1117, #1D2939); color: #fff; margin-bottom: 18px }
+.pay-amount-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px }
+.pay-amount small { display: block; font-size: .76rem; letter-spacing: .06em; text-transform: uppercase; opacity: .65; font-weight: 700 }
+.pay-amount b { display: block; font-size: 2.3rem; line-height: 1.1; letter-spacing: -.02em; margin-top: 4px }
+.pay-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; background: rgba(255, 255, 255, .12); font-size: .76rem; font-weight: 700 }
+.pay-chip .ic { width: 13px; height: 13px }
+.pay-split { display: grid; gap: 8px; margin: 18px 0 14px; padding-top: 16px; border-top: 1px dashed rgba(255, 255, 255, .18); font-size: .85rem }
+.pay-split div { display: flex; justify-content: space-between; gap: 14px; opacity: .82 }
+.pay-split dd { font-weight: 600; white-space: nowrap }
+.pay-ref { font-size: .74rem; letter-spacing: .04em; opacity: .5; font-weight: 600 }
 .pay-methods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px }
 .pay-method { position: relative; cursor: pointer }
 .pay-method input { position: absolute; opacity: 0 }
@@ -443,9 +449,15 @@
 .pay-method small { display: block; font-size: .72rem; color: var(--muted) }
 .pay-method input:checked + span { border-color: var(--accent); background: var(--accent-soft) }
 .pay-method input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px }
-.pay-accepted { text-align: center; font-size: .82rem; color: var(--muted); margin: 0 0 16px }
-.pay-btn { padding: 15px; font-size: 1rem }
+.pay-accepted { text-align: center; font-size: .82rem; color: var(--muted); margin: 0 0 14px }
+.pay-btn { padding: 15px; font-size: 1rem; gap: 8px }
 .pay-btn .spinner { width: 16px; height: 16px; border-width: 2px; margin: 0 }
+.pay-btn-go { transition: transform .15s }
+.pay-btn:hover .pay-btn-go { transform: translateX(3px) }
+.pay-btn:disabled .pay-btn-go { display: none }
+.pay-assure { list-style: none; display: grid; gap: 9px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--flow-line) }
+.pay-assure li { display: flex; align-items: center; gap: 9px; font-size: .82rem; color: var(--flow-ink-2); font-weight: 600 }
+.pay-assure .ic { width: 16px; height: 16px; flex-shrink: 0; color: var(--ok) }
 
 /* ---- Confirmation ------------------------------------------------------- */
 
