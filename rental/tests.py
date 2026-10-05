@@ -965,6 +965,7 @@ def _add_driver(booking, choice="SELF", name="Flow User", number="WB012015001234
     from datetime import date
 
     booking.set_driver(choice, name, number, date(*born), timezone.localdate() + timedelta(days=900))
+    booking.delivery_chosen = True  # as if the delivery step had been answered too
     booking.save()
     return booking
 
@@ -1898,12 +1899,13 @@ class ProfilePageTests(FlowFixtureMixin, TestCase):
         self.assertEqual(self.user.licence_number, "")
         self.assertIsNone(self.user.licence_expiry)
 
-    def test_a_saved_profile_licence_skips_the_driver_step(self):
+    def test_a_saved_profile_licence_skips_the_driver_step_only(self):
+        """The licence carries over; how to collect the car is still asked each time."""
         client = _login("user_flow")
         client.post("/my-bookings/", self.form())
         free = timezone.localdate() + timedelta(days=15)
         response = client.post(f"/booking/{self.car.pk}/", self.dates(free, 2))
-        self.assertIn("/summary/", response["Location"])
+        self.assertIn("/delivery/", response["Location"])
 
     def test_signed_out_visitors_are_sent_to_login(self):
         response = Client().get("/my-bookings/")
@@ -1994,3 +1996,40 @@ class DeliveryPrefillTests(FlowFixtureMixin, TestCase):
         mine = _add_driver(self.make("DG-DLV-0006", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING))
         body = _login("user_flow").get(f"/delivery/{mine.booking_id}/").content.decode()
         self.assertNotIn("12 Park Street", body)
+
+
+class StepSkippingTests(FlowFixtureMixin, TestCase):
+    """A saved licence skips the driver step; the delivery choice is always asked."""
+
+    def book(self, client, days):
+        free = timezone.localdate() + timedelta(days=days)
+        return client.post(f"/booking/{self.car.pk}/", self.dates(free, 2))
+
+    def test_first_booking_asks_for_the_driver_then_delivery(self):
+        client = _login("user_flow")
+        response = self.book(client, 12)
+        hold = Booking.objects.get(user=self.user, status=Booking.Status.PENDING)
+        self.assertIn(f"/driver/{hold.booking_id}/", response["Location"])
+        after_driver = client.post(f"/driver/{hold.booking_id}/", _driver_post())
+        self.assertRedirects(after_driver, f"/delivery/{hold.booking_id}/", fetch_redirect_response=False)
+
+    def test_second_booking_lands_on_delivery_not_review(self):
+        client = _login("user_flow")
+        first = Booking.objects.get(pk=self.book(client, 12) and Booking.objects.latest("created_at").pk)
+        client.post(f"/driver/{first.booking_id}/", _driver_post())
+        client.post(f"/delivery/{first.booking_id}/", {"delivery_method": "STORE_PICKUP"})
+        response = self.book(client, 40)
+        second = Booking.objects.exclude(pk=first.pk).get(user=self.user, status=Booking.Status.PENDING)
+        self.assertTrue(second.driver_checked)
+        self.assertFalse(second.delivery_chosen)
+        self.assertIn(f"/delivery/{second.booking_id}/", response["Location"])
+
+    def test_review_sends_you_back_until_delivery_is_answered(self):
+        client = _login("user_flow")
+        self.book(client, 12)
+        hold = Booking.objects.get(user=self.user, status=Booking.Status.PENDING)
+        client.post(f"/driver/{hold.booking_id}/", _driver_post())
+        response = client.get(f"/summary/{hold.booking_id}/")
+        self.assertRedirects(response, f"/delivery/{hold.booking_id}/", fetch_redirect_response=False)
+        client.post(f"/delivery/{hold.booking_id}/", {"delivery_method": "STORE_PICKUP"})
+        self.assertEqual(client.get(f"/summary/{hold.booking_id}/").status_code, 200)

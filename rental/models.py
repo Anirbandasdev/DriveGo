@@ -235,6 +235,9 @@ class Booking(models.Model):
     driver_date_of_birth = models.DateField(null=True, blank=True)
     driver_licence_expiry = models.DateField(null=True, blank=True)
     driver_checked_at = models.DateTimeField(null=True, blank=True)
+    # The licence carries over between bookings; how to collect the car does not,
+    # so every booking asks once and this records that it was answered.
+    delivery_chosen = models.BooleanField(default=False)
     admin_note = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -319,6 +322,7 @@ class Booking(models.Model):
             return False
         self.set_driver(other.driver_choice, other.driver_name, other.driver_licence_number,
                         other.driver_date_of_birth, other.driver_licence_expiry)
+        self.delivery_chosen = other.delivery_chosen
         return True
 
     @property
@@ -337,6 +341,8 @@ class Booking(models.Model):
             return "confirmation"
         if not self.driver_checked:
             return "driver"
+        if not self.delivery_chosen:
+            return "delivery"
         return "summary"
 
     @classmethod

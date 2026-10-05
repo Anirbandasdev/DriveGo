@@ -481,6 +481,9 @@ def _checkout_booking(request, booking_id, step):
     if step in ("delivery", "summary", "payment") and not booking.driver_checked:
         messages.info(request, "Tell us who is driving and we'll check the licence.")
         return None, redirect("driver", booking_id=booking.booking_id)
+    if step in ("summary", "payment") and not booking.delivery_chosen:
+        messages.info(request, "Tell us how you'd like to collect the car.")
+        return None, redirect("delivery", booking_id=booking.booking_id)
     return booking, None
 
 
@@ -642,6 +645,7 @@ def delivery(request, booking_id):
             booking.delivery_city = data["delivery_city"].strip() if home else ""
             booking.delivery_pincode = data["delivery_pincode"].strip() if home else ""
             booking.delivery_instructions = data["delivery_instructions"].strip() if home else ""
+            booking.delivery_chosen = True
             booking.apply_price()
             booking.save()
             return redirect("summary", booking_id=booking.booking_id)
