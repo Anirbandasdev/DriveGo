@@ -217,7 +217,10 @@ body[data-page="home"] .section {
 
 .field input,
 .field select,
-.field textarea {
+.field textarea,
+.av-field input,
+.av-field select,
+.av-field textarea {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid rgba(17,24,39,.1);
@@ -232,14 +235,19 @@ body[data-page="home"] .section {
   transition: border-color .15s, box-shadow .15s, background .15s
 }
 
-.field input::placeholder {
+.field input::placeholder,
+.av-field input::placeholder,
+.av-field textarea::placeholder {
   color: #9AA1AD;
   font-weight: 400
 }
 
 .field input:focus,
 .field select:focus,
-.field textarea:focus {
+.field textarea:focus,
+.av-field input:focus,
+.av-field select:focus,
+.av-field textarea:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(20, 110, 245, .14)

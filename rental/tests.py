@@ -1956,3 +1956,41 @@ class HeroCarTests(TestCase):
     def test_the_hero_link_carries_the_dates(self):
         body = Client().get("/").content.decode()
         self.assertIn(f'href="/cars/{self.dear.pk}/?pickup_date=', body)
+
+
+class DeliveryPrefillTests(FlowFixtureMixin, TestCase):
+    """A returning customer should not retype an address they have used before."""
+
+    def address(self):
+        return {"delivery_method": "HOME_DELIVERY", "delivery_address": "12 Park Street",
+                "delivery_city": "Kolkata", "delivery_pincode": "700016",
+                "delivery_instructions": "Blue gate"}
+
+    def test_the_last_delivery_address_comes_back(self):
+        first = _add_driver(self.make("DG-DLV-0001", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING))
+        client = _login("user_flow")
+        client.post(f"/delivery/{first.booking_id}/", self.address())
+        second = _add_driver(self.make("DG-DLV-0002", days_from_now=20, status=Booking.Status.PENDING,
+                                       pay=Booking.PaymentStatus.PENDING))
+        body = client.get(f"/delivery/{second.booking_id}/").content.decode()
+        self.assertIn("12 Park Street", body)
+        self.assertIn("700016", body)
+
+    def test_the_booking_still_starts_as_store_pickup(self):
+        first = _add_driver(self.make("DG-DLV-0003", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING))
+        client = _login("user_flow")
+        client.post(f"/delivery/{first.booking_id}/", self.address())
+        second = _add_driver(self.make("DG-DLV-0004", days_from_now=20, status=Booking.Status.PENDING,
+                                       pay=Booking.PaymentStatus.PENDING))
+        client.get(f"/delivery/{second.booking_id}/")
+        second.refresh_from_db()
+        self.assertEqual(second.delivery_method, "STORE_PICKUP")
+        self.assertEqual(second.delivery_charge, 0)
+
+    def test_someone_elses_address_is_never_shown(self):
+        theirs = _add_driver(self.make("DG-DLV-0005", user=self.other, status=Booking.Status.PENDING,
+                                       pay=Booking.PaymentStatus.PENDING))
+        _login("user_flow2").post(f"/delivery/{theirs.booking_id}/", self.address())
+        mine = _add_driver(self.make("DG-DLV-0006", status=Booking.Status.PENDING, pay=Booking.PaymentStatus.PENDING))
+        body = _login("user_flow").get(f"/delivery/{mine.booking_id}/").content.decode()
+        self.assertNotIn("12 Park Street", body)

@@ -646,15 +646,23 @@ def delivery(request, booking_id):
             booking.save()
             return redirect("summary", booking_id=booking.booking_id)
     else:
+        # Fall back to the address of their last delivery, so nobody retypes it.
+        last = booking if booking.delivery_address else _last_delivery(booking.user, booking.pk)
         form = DeliveryForm(initial={
             "delivery_method": booking.delivery_method,
-            "delivery_address": booking.delivery_address,
-            "delivery_city": booking.delivery_city,
-            "delivery_pincode": booking.delivery_pincode,
-            "delivery_instructions": booking.delivery_instructions,
+            "delivery_address": last.delivery_address if last else "",
+            "delivery_city": last.delivery_city if last else "",
+            "delivery_pincode": last.delivery_pincode if last else "",
+            "delivery_instructions": last.delivery_instructions if last else "",
         })
     method = form["delivery_method"].value() or booking.delivery_method
     return render(request, "delivery.html", _checkout_context(booking, "delivery", form=form, method=method))
+
+
+def _last_delivery(customer, exclude_pk):
+    """The customer's most recent home delivery, for pre-filling the address."""
+    return (Booking.objects.filter(user=customer, delivery_method="HOME_DELIVERY")
+            .exclude(pk=exclude_pk).exclude(delivery_address="").order_by("-created_at").first())
 
 
 @customer_required
