@@ -799,9 +799,14 @@ def cancel_booking(request, booking_id):
 
 
 @customer_required
-def my_bookings(request, profile_form=None, open_profile=False):
+def my_bookings(request):
     """Bookings, plus the profile editor that opens over them."""
     customer = get_customer(request)
+    profile_form, open_profile = None, False
+    if request.method == "POST":
+        profile_form, open_profile = _save_profile(request, customer), True
+        if profile_form is None:
+            return redirect("my_bookings")
     tab = request.GET.get("tab", "upcoming")
     base = Booking.objects.filter(user=customer).select_related("car", "pickup_location")
     groups = {
@@ -839,34 +844,29 @@ def _profile_form(customer):
     })
 
 
-@customer_required
-def profile(request):
-    """Name, mobile number and the licence we reuse on the next booking."""
-    customer = get_customer(request)
-    if request.method == "POST":
-        form = ProfileForm(request.POST)
-        if form.is_valid():
-            data = form.cleaned_data
-            customer.full_name = data["full_name"]
-            customer.phone = data["phone"]
-            if form.licence_given:
-                customer.licence_number = data["licence_number"]
-                customer.licence_name = data["full_name"]
-                customer.date_of_birth = data["date_of_birth"]
-                customer.licence_expiry = data["licence_expiry"]
-                customer.licence_checked_at = timezone.now()
-            else:
-                customer.licence_number = customer.licence_name = ""
-                customer.date_of_birth = customer.licence_expiry = customer.licence_checked_at = None
-            customer.save(update_fields=[
-                "full_name", "phone", "licence_number", "licence_name",
-                "date_of_birth", "licence_expiry", "licence_checked_at",
-            ])
-            messages.success(request, "Profile saved." + (f" {form.result.message}." if form.licence_given else ""))
-            return redirect("my_bookings")
-        # Something is wrong: show the bookings page again with the editor open.
-        return my_bookings(request, profile_form=form, open_profile=True)
-    return my_bookings(request, open_profile=True)
+def _save_profile(request, customer):
+    """Store the profile. Returns None when saved, or the bound form to show again."""
+    form = ProfileForm(request.POST)
+    if not form.is_valid():
+        return form
+    data = form.cleaned_data
+    customer.full_name = data["full_name"]
+    customer.phone = data["phone"]
+    if form.licence_given:
+        customer.licence_number = data["licence_number"]
+        customer.licence_name = data["full_name"]
+        customer.date_of_birth = data["date_of_birth"]
+        customer.licence_expiry = data["licence_expiry"]
+        customer.licence_checked_at = timezone.now()
+    else:
+        customer.licence_number = customer.licence_name = ""
+        customer.date_of_birth = customer.licence_expiry = customer.licence_checked_at = None
+    customer.save(update_fields=[
+        "full_name", "phone", "licence_number", "licence_name",
+        "date_of_birth", "licence_expiry", "licence_checked_at",
+    ])
+    messages.success(request, "Profile saved." + (f" {form.result.message}." if form.licence_given else ""))
+    return None
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from . import views
 
@@ -21,7 +22,8 @@ urlpatterns = [
     path("confirmation/<str:booking_id>/", views.confirmation, name="confirmation"),
     path("bookings/<str:booking_id>/cancel/", views.cancel_booking, name="cancel_booking"),
     path("my-bookings/", views.my_bookings, name="my_bookings"),
-    path("profile/", views.profile, name="profile"),
+    # Kept so old links still land somewhere: the profile lives on My Bookings now.
+    path("profile/", RedirectView.as_view(url="/my-bookings/#profile", permanent=False), name="profile"),
     path("login/", views.login_view, name="login"),
     path("signup/", views.signup_view, name="signup"),
     path("logout/", views.logout_view, name="logout"),

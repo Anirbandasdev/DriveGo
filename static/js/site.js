@@ -471,7 +471,12 @@ function initProfileDialog() {
   dialog.addEventListener("click", function (e) {
     if (e.target === dialog) dialog.close();
   });
+  function openFromHash() {
+    if (location.hash === "#profile") dialog.showModal();
+  }
+  window.addEventListener("hashchange", openFromHash);
   if (dialog.hasAttribute("data-open")) dialog.showModal();
+  else openFromHash();
 }
 
 document.addEventListener("DOMContentLoaded", function () {

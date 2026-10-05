@@ -128,7 +128,7 @@ class AdminAccessTests(TestCase):
 
     def test_navbar_hides_login_and_admin_for_customers(self):
         body = self.login_as("user_cust").get("/").content.decode()
-        self.assertIn('href="/profile/" class="avatar"', body)
+        self.assertIn('href="/my-bookings/#profile" class="avatar"', body)
         self.assertNotIn("Admin</a>", body.split('class="sn-links"')[1].split("</nav>")[0])
         self.assertNotIn("Admin console</a>", body)
 
@@ -1837,10 +1837,10 @@ class ProfilePageTests(FlowFixtureMixin, TestCase):
         data.update(over)
         return data
 
-    def test_the_editor_opens_over_the_bookings_page(self):
-        body = _login("user_flow").get("/profile/").content.decode()
-        self.assertIn("My bookings", body)
-        self.assertIn('id="profileDialog" data-open', body)
+    def test_the_old_profile_address_redirects_to_the_one_page(self):
+        response = _login("user_flow").get("/profile/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/my-bookings/#profile")
 
     def test_bookings_page_carries_the_editor_closed(self):
         body = _login("user_flow").get("/my-bookings/").content.decode()
@@ -1848,7 +1848,7 @@ class ProfilePageTests(FlowFixtureMixin, TestCase):
         self.assertNotIn("data-open", body)
 
     def test_an_invalid_save_reopens_the_editor_with_the_error(self):
-        response = _login("user_flow").post("/profile/", self.form(phone="12345"))
+        response = _login("user_flow").post("/my-bookings/", self.form(phone="12345"))
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
         self.assertIn('id="profileDialog" data-open', body)
@@ -1856,13 +1856,13 @@ class ProfilePageTests(FlowFixtureMixin, TestCase):
 
     def test_page_shows_the_saved_details(self):
         Customer.objects.filter(pk=self.user.pk).update(phone="9800011122", licence_number="WB0120150012345")
-        body = _login("user_flow").get("/profile/").content.decode()
+        body = _login("user_flow").get("/my-bookings/").content.decode()
         self.assertIn("9800011122", body)
         self.assertIn("WB01 20150012345", body)
         self.assertIn(self.user.email, body)
 
     def test_saving_updates_name_phone_and_licence(self):
-        response = _login("user_flow").post("/profile/", self.form(full_name="Anirban Das"))
+        response = _login("user_flow").post("/my-bookings/", self.form(full_name="Anirban Das"))
         self.assertRedirects(response, "/my-bookings/", fetch_redirect_response=False)
         self.user.refresh_from_db()
         self.assertEqual(self.user.full_name, "Anirban Das")
@@ -1871,42 +1871,42 @@ class ProfilePageTests(FlowFixtureMixin, TestCase):
         self.assertIsNotNone(self.user.licence_checked_at)
 
     def test_a_bad_phone_is_refused(self):
-        response = _login("user_flow").post("/profile/", self.form(phone="12345"))
+        response = _login("user_flow").post("/my-bookings/", self.form(phone="12345"))
         self.assertContains(response, "10-digit Indian mobile number")
         self.user.refresh_from_db()
         self.assertEqual(self.user.phone, "")
 
     def test_a_number_only_name_is_refused(self):
-        response = _login("user_flow").post("/profile/", self.form(full_name="12"))
+        response = _login("user_flow").post("/my-bookings/", self.form(full_name="12"))
         self.assertContains(response, "Enter a real full name")
 
     def test_a_bad_licence_is_refused(self):
-        response = _login("user_flow").post("/profile/", self.form(licence_number="XX999"))
+        response = _login("user_flow").post("/my-bookings/", self.form(licence_number="XX999"))
         self.assertContains(response, "as it is printed")
         self.user.refresh_from_db()
         self.assertEqual(self.user.licence_number, "")
 
     def test_half_filled_licence_is_refused(self):
-        response = _login("user_flow").post("/profile/", self.form(licence_expiry=""))
+        response = _login("user_flow").post("/my-bookings/", self.form(licence_expiry=""))
         self.assertContains(response, "clear all three")
 
     def test_clearing_all_three_removes_the_saved_licence(self):
         client = _login("user_flow")
-        client.post("/profile/", self.form())
-        client.post("/profile/", self.form(licence_number="", date_of_birth="", licence_expiry=""))
+        client.post("/my-bookings/", self.form())
+        client.post("/my-bookings/", self.form(licence_number="", date_of_birth="", licence_expiry=""))
         self.user.refresh_from_db()
         self.assertEqual(self.user.licence_number, "")
         self.assertIsNone(self.user.licence_expiry)
 
     def test_a_saved_profile_licence_skips_the_driver_step(self):
         client = _login("user_flow")
-        client.post("/profile/", self.form())
+        client.post("/my-bookings/", self.form())
         free = timezone.localdate() + timedelta(days=15)
         response = client.post(f"/booking/{self.car.pk}/", self.dates(free, 2))
         self.assertIn("/summary/", response["Location"])
 
     def test_signed_out_visitors_are_sent_to_login(self):
-        response = Client().get("/profile/")
+        response = Client().get("/my-bookings/")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login/", response["Location"])
 

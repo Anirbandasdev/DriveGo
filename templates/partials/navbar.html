@@ -15,7 +15,7 @@
 
     <div class="sn-actions">
       {% if current_customer %}
-      <a href="{% url 'profile' %}" class="avatar" aria-label="My account" title="{{ current_customer }}">{% if current_customer.profile_image_url %}<img src="{{ current_customer.profile_image_url }}" alt="" />{% else %}{{ current_customer.full_name|default:current_customer.email|default:"D"|slice:":1"|upper }}{% endif %}</a>
+      <a href="{% url 'my_bookings' %}#profile" class="avatar" aria-label="My account" title="{{ current_customer }}">{% if current_customer.profile_image_url %}<img src="{{ current_customer.profile_image_url }}" alt="" />{% else %}{{ current_customer.full_name|default:current_customer.email|default:"D"|slice:":1"|upper }}{% endif %}</a>
       {% else %}
       <a href="{% url 'login' %}" class="btn btn-ghost">Login</a>
       {% endif %}

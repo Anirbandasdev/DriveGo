@@ -1,6 +1,6 @@
 {# Profile editor, opened from the My Bookings header. #}
 <dialog class="pm" id="profileDialog"{% if open_profile %} data-open{% endif %}>
-  <form class="pm-card" action="{% url 'profile' %}" method="post">
+  <form class="pm-card" action="{% url 'my_bookings' %}" method="post">
     {% csrf_token %}
     <header class="pm-head">
       <div>
