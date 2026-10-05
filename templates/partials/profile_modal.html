@@ -1,0 +1,58 @@
+{# Profile editor, opened from the My Bookings header. #}
+<dialog class="pm" id="profileDialog"{% if open_profile %} data-open{% endif %}>
+  <form class="pm-card" action="{% url 'profile' %}" method="post">
+    {% csrf_token %}
+    <header class="pm-head">
+      <div>
+        <h2>Your profile</h2>
+        <p>{{ customer.email }}</p>
+      </div>
+      <button class="pm-close" type="button" data-profile-close aria-label="Close">✕</button>
+    </header>
+
+    <div class="pm-body">
+      {% if profile_form.non_field_errors %}<div class="co-alert is-error">{% for e in profile_form.non_field_errors %}{{ e }} {% endfor %}</div>{% endif %}
+
+      <div class="field">
+        <label for="{{ profile_form.full_name.id_for_label }}">Full name</label>
+        <input type="text" name="full_name" id="{{ profile_form.full_name.id_for_label }}" value="{{ profile_form.full_name.value|default:'' }}" maxlength="120" autocomplete="name" required />
+        {% for e in profile_form.full_name.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+      </div>
+
+      <div class="field">
+        <label for="{{ profile_form.phone.id_for_label }}">Mobile number</label>
+        <input type="tel" name="phone" id="{{ profile_form.phone.id_for_label }}" value="{{ profile_form.phone.value|default:'' }}" maxlength="20" placeholder="98765 43210" autocomplete="tel" required />
+        <p class="field-hint">Used only to reach you about a booking.</p>
+        {% for e in profile_form.phone.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+      </div>
+
+      <h3 class="pm-sub">Driving licence</h3>
+      <p class="field-hint">Saved so checkout can skip the driver step. Clear all three boxes to remove it.</p>
+
+      <div class="field">
+        <label for="{{ profile_form.licence_number.id_for_label }}">Driving licence number</label>
+        <input type="text" name="licence_number" id="{{ profile_form.licence_number.id_for_label }}" value="{{ profile_form.licence_number.value|default:'' }}" maxlength="20" placeholder="WB01 20150012345" spellcheck="false" />
+        {% for e in profile_form.licence_number.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+      </div>
+
+      <div class="pm-row">
+        <div class="field">
+          <label for="{{ profile_form.date_of_birth.id_for_label }}">Date of birth</label>
+          <input type="date" name="date_of_birth" id="{{ profile_form.date_of_birth.id_for_label }}" value="{{ profile_form.date_of_birth.value|date:'Y-m-d'|default:'' }}" />
+          <p class="field-hint">{{ min_age }} or older.</p>
+          {% for e in profile_form.date_of_birth.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+        </div>
+        <div class="field">
+          <label for="{{ profile_form.licence_expiry.id_for_label }}">Valid until</label>
+          <input type="date" name="licence_expiry" id="{{ profile_form.licence_expiry.id_for_label }}" value="{{ profile_form.licence_expiry.value|date:'Y-m-d'|default:'' }}" />
+          {% for e in profile_form.licence_expiry.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <footer class="pm-foot">
+      <button class="btn btn-ghost" type="button" data-profile-close>Cancel</button>
+      <button class="btn btn-primary" type="submit">Save profile</button>
+    </footer>
+  </form>
+</dialog>

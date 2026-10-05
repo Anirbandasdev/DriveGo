@@ -799,7 +799,8 @@ def cancel_booking(request, booking_id):
 
 
 @customer_required
-def my_bookings(request):
+def my_bookings(request, profile_form=None, open_profile=False):
+    """Bookings, plus the profile editor that opens over them."""
     customer = get_customer(request)
     tab = request.GET.get("tab", "upcoming")
     base = Booking.objects.filter(user=customer).select_related("car", "pickup_location")
@@ -822,6 +823,19 @@ def my_bookings(request):
         "counts": counts,
         "customer": customer,
         "total_trips": counts["upcoming"] + counts["completed"],
+        "profile_form": profile_form or _profile_form(customer),
+        "open_profile": open_profile,
+        "min_age": MIN_AGE,
+    })
+
+
+def _profile_form(customer):
+    return ProfileForm(initial={
+        "full_name": customer.full_name,
+        "phone": customer.phone,
+        "licence_number": format_licence(customer.licence_number),
+        "date_of_birth": customer.date_of_birth,
+        "licence_expiry": customer.licence_expiry,
     })
 
 
@@ -849,16 +863,10 @@ def profile(request):
                 "date_of_birth", "licence_expiry", "licence_checked_at",
             ])
             messages.success(request, "Profile saved." + (f" {form.result.message}." if form.licence_given else ""))
-            return redirect("profile")
-    else:
-        form = ProfileForm(initial={
-            "full_name": customer.full_name,
-            "phone": customer.phone,
-            "licence_number": format_licence(customer.licence_number),
-            "date_of_birth": customer.date_of_birth,
-            "licence_expiry": customer.licence_expiry,
-        })
-    return render(request, "profile.html", {"customer": customer, "form": form, "min_age": MIN_AGE})
+            return redirect("my_bookings")
+        # Something is wrong: show the bookings page again with the editor open.
+        return my_bookings(request, profile_form=form, open_profile=True)
+    return my_bookings(request, open_profile=True)
 
 
 # ---------------------------------------------------------------------------

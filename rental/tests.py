@@ -1837,6 +1837,23 @@ class ProfilePageTests(FlowFixtureMixin, TestCase):
         data.update(over)
         return data
 
+    def test_the_editor_opens_over_the_bookings_page(self):
+        body = _login("user_flow").get("/profile/").content.decode()
+        self.assertIn("My bookings", body)
+        self.assertIn('id="profileDialog" data-open', body)
+
+    def test_bookings_page_carries_the_editor_closed(self):
+        body = _login("user_flow").get("/my-bookings/").content.decode()
+        self.assertIn('id="profileDialog"', body)
+        self.assertNotIn("data-open", body)
+
+    def test_an_invalid_save_reopens_the_editor_with_the_error(self):
+        response = _login("user_flow").post("/profile/", self.form(phone="12345"))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn('id="profileDialog" data-open', body)
+        self.assertIn("10-digit Indian mobile number", body)
+
     def test_page_shows_the_saved_details(self):
         Customer.objects.filter(pk=self.user.pk).update(phone="9800011122", licence_number="WB0120150012345")
         body = _login("user_flow").get("/profile/").content.decode()
@@ -1846,7 +1863,7 @@ class ProfilePageTests(FlowFixtureMixin, TestCase):
 
     def test_saving_updates_name_phone_and_licence(self):
         response = _login("user_flow").post("/profile/", self.form(full_name="Anirban Das"))
-        self.assertRedirects(response, "/profile/", fetch_redirect_response=False)
+        self.assertRedirects(response, "/my-bookings/", fetch_redirect_response=False)
         self.user.refresh_from_db()
         self.assertEqual(self.user.full_name, "Anirban Das")
         self.assertEqual(self.user.phone, "9876543210")

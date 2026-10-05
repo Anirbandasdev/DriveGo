@@ -457,6 +457,23 @@ function initDropdowns() {
   document.addEventListener("scroll", follow, true);
 }
 
+/* Profile editor on the bookings page. It is a <dialog>, so Escape and the
+   backdrop come for free; the server opens it when a save came back invalid. */
+function initProfileDialog() {
+  var dialog = document.getElementById("profileDialog");
+  if (!dialog) return;
+  document.querySelectorAll("[data-profile-open]").forEach(function (btn) {
+    btn.addEventListener("click", function () { dialog.showModal(); });
+  });
+  dialog.querySelectorAll("[data-profile-close]").forEach(function (btn) {
+    btn.addEventListener("click", function () { dialog.close(); });
+  });
+  dialog.addEventListener("click", function (e) {
+    if (e.target === dialog) dialog.close();
+  });
+  if (dialog.hasAttribute("data-open")) dialog.showModal();
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   bindNav();
   initDropdowns();
@@ -469,4 +486,5 @@ document.addEventListener("DOMContentLoaded", function () {
   else bindAutoDropDate();
   if (page === "delivery") initDelivery();
   if (page === "admin") bindAdminNav();
+  if (page === "bookings") initProfileDialog();
 });

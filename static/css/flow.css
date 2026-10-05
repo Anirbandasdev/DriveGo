@@ -613,3 +613,23 @@
   .done-hero, .co-card { box-shadow: none; border-color: #ccc }
   .done-grid { grid-template-columns: 1fr 1fr }
 }
+
+/* ---- Profile dialog ----------------------------------------------------- */
+.pm { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: none; border-radius: 18px; background: #fff; color: var(--flow-ink); box-shadow: 0 24px 60px rgba(16, 24, 40, .22) }
+.pm::backdrop { background: rgba(16, 24, 40, .55) }
+.pm-card { display: flex; flex-direction: column; max-height: calc(100vh - 48px) }
+.pm-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--flow-line) }
+.pm-head h2 { font-size: 1.1rem; font-weight: 800 }
+.pm-head p { font-size: .82rem; color: var(--muted) }
+.pm-close { background: none; border: none; font-size: 1rem; line-height: 1; color: var(--muted); cursor: pointer; padding: 4px 6px; border-radius: 8px }
+.pm-close:hover { background: var(--flow-soft); color: var(--flow-ink) }
+.pm-body { display: grid; gap: 14px; padding: 18px 20px; overflow-y: auto }
+.pm-sub { font-size: .95rem; font-weight: 800; margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--flow-line) }
+.pm-sub + .field-hint { margin-top: -10px }
+.pm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+.pm-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--flow-line); background: var(--flow-soft) }
+@media (max-width: 560px) {
+  .pm-row { grid-template-columns: 1fr }
+  .pm-foot { flex-direction: column-reverse }
+  .pm-foot .btn { width: 100% }
+}
