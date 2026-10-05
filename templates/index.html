@@ -25,7 +25,7 @@
       <div class="hx-photo">
         <img src="{% if featured_car %}{{ featured_car.display_image }}{% else %}https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1000&auto=format&fit=crop{% endif %}" alt="{% if featured_car %}{{ featured_car.brand }} {{ featured_car.model }}{% else %}Car ready for pickup{% endif %}" loading="eager" fetchpriority="high" />
         {% if featured_car %}
-        <a class="hx-featured" href="{% url 'car_detail' featured_car.id %}">
+        <a class="hx-featured" href="{% url 'car_detail' featured_car.id %}?{{ popular_qs }}">
           <span><small>Featured · {{ featured_car.location.name }}</small><b>{{ featured_car.brand }} {{ featured_car.model }}</b></span>
           <span class="hx-price">₹{{ featured_car.price_per_day|inr }}<small>/day</small></span>
         </a>

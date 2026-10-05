@@ -307,7 +307,9 @@ def home(request):
         .annotate(trips=Count("bookings")).order_by("-trips", "price_per_day")
     )
     popular = fleet[:8]
-    availability = availability_for_cars(request, popular, pickup, drop)
+    with_photo = [car for car in fleet if car.image_url]
+    # One batched availability call covers the popular grid and the hero car.
+    availability = availability_for_cars(request, list({c.pk: c for c in popular + with_photo}.values()), pickup, drop)
     popular_cars = [{"car": car, "info": availability[car.pk], "qs": qs, "estimate": price_estimate(car, pickup, drop)}
                     for car in popular]
     car_types = []
@@ -315,12 +317,15 @@ def home(request):
         cars = sorted((car for car in fleet if car.category == name), key=lambda car: car.price_per_day)
         if cars:
             car_types.append({"name": name, "count": len(cars), "from_price": cars[0].price_per_day, "image": cars[0].display_image})
-    with_photo = [car for car in fleet if car.image_url]
+    # The hero shows a car somebody can actually book on the dates in the search bar.
+    free_with_photo = [car for car in with_photo if availability[car.pk]["available"]]
+    featured_car = max(free_with_photo or with_photo, key=lambda car: car.price_per_day) if with_photo else None
     return render(request, "index.html", {
         "locations": locations,
         "popular_cars": popular_cars,
         "car_types": car_types,
-        "featured_car": max(with_photo, key=lambda car: car.price_per_day) if with_photo else None,
+        "featured_car": featured_car,
+        "featured_free": bool(free_with_photo),
         "window": window_params(pickup, drop),
         "popular_qs": qs,
         "pickup": pickup, "drop": drop,

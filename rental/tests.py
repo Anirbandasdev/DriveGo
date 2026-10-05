@@ -1900,3 +1900,42 @@ class SecurityHeaderTests(TestCase):
         response = Client().get("/")
         self.assertEqual(response["Cross-Origin-Opener-Policy"], "same-origin-allow-popups")
         self.assertEqual(response["Referrer-Policy"], "strict-origin-when-cross-origin")
+
+
+class HeroCarTests(TestCase):
+    """The hero shows a car that is free on the dates in the search bar."""
+
+    def setUp(self):
+        self.loc = Location.objects.create(name="Hero", address="Addr", city="Kolkata")
+        self.user = Customer.objects.create(clerk_user_id="user_hero", email="hero@example.com")
+        self.dear = Car.objects.create(location=self.loc, category="Luxury", brand="Mercedes", model="C-Class",
+                                       registration_number="WB06H0001", price_per_day=10500,
+                                       image_url="https://example.com/merc.jpg")
+        self.cheaper = Car.objects.create(location=self.loc, category="SUV", brand="Kia", model="Seltos",
+                                          registration_number="WB06H0002", price_per_day=2500,
+                                          image_url="https://example.com/seltos.jpg")
+
+    def hero(self, html):
+        """Just the featured card in the hero, not the grid below it."""
+        start = html.index('class="hx-featured"')
+        return html[start:html.index("</a>", start)]
+
+    def test_the_most_expensive_car_with_a_photo_is_featured(self):
+        self.assertIn("Mercedes C-Class", self.hero(Client().get("/").content.decode()))
+
+    def test_a_booked_car_is_replaced_by_one_that_is_free(self):
+        from .views import default_window
+
+        pickup, drop = default_window()
+        Booking.objects.create(
+            booking_id="DG-HERO-0001", user=self.user, car=self.dear, pickup_location=self.loc,
+            pickup_datetime=pickup - timedelta(days=1), dropoff_datetime=drop + timedelta(days=1),
+            status=Booking.Status.CONFIRMED, payment_status=Booking.PaymentStatus.PAID,
+        )
+        hero = self.hero(Client().get("/").content.decode())
+        self.assertIn("Kia Seltos", hero)
+        self.assertNotIn("Mercedes C-Class", hero)
+
+    def test_the_hero_link_carries_the_dates(self):
+        body = Client().get("/").content.decode()
+        self.assertIn(f'href="/cars/{self.dear.pk}/?pickup_date=', body)
